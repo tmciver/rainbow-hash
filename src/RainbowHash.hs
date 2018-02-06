@@ -14,6 +14,12 @@ put :: Handle -> IO Hash
 put h = do
   dataDir <- D.getXdgDirectory D.XdgData "rainbowhash"
   bs <- B.hGetContents h
+  writeDataToFile dataDir bs
+
+-- | Write the data given by the `ByteString` to a file under the directory
+-- given by `FilePath` returning the hash of the contents.
+writeDataToFile :: FilePath -> B.ByteString -> IO Hash
+writeDataToFile dataDir bs = do
   let i = hash bs
       (d,f) = splitAt 2 i
       dirPath = dataDir </> d
