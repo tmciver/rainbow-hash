@@ -35,10 +35,20 @@ writeDataToFile dataDir bs = do
   B.writeFile filePath bs
   pure i
 
--- | Returns 'True' if the given hash exists, 'False' otherwise.
-exists :: Hash -> IO Bool
-exists h = do
+hashToFilePath :: Hash -> IO FilePath
+hashToFilePath h = do
   dataDir <- rainbowHashDir
   let (d,f) = splitAt 2 h
       filePath = dataDir </> d </> f
-  D.doesFileExist filePath
+  pure filePath
+
+-- | Returns 'True' if the given hash exists, 'False' otherwise.
+exists :: Hash -> IO Bool
+exists h = hashToFilePath h >>= D.doesFileExist
+
+get :: Hash -> IO (Maybe B.ByteString)
+get h = do fp <- hashToFilePath h
+           exists' <- D.doesFileExist fp
+           if exists'
+             then Just <$> B.readFile fp
+             else pure Nothing
