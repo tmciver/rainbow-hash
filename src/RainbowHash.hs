@@ -1,10 +1,10 @@
 module RainbowHash where
 
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as C8
 import System.IO (Handle)
 import System.FilePath
 import qualified System.Directory as D
+import qualified Crypto.Hash as C
 
 type Hash = String
 
@@ -29,4 +29,4 @@ writeDataToFile dataDir bs = do
   pure i
 
 hash :: B.ByteString -> Hash
-hash bs = C8.unpack $ B.take 32 bs
+hash bs = show $ (C.hash bs :: C.SHA256)
