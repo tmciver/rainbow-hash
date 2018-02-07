@@ -8,6 +8,9 @@ import qualified Crypto.Hash as C
 
 type Hash = String
 
+rainbowHashDir :: IO FilePath
+rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
+
 -- | Return the 'String' of the SHA256 hash of the given 'ByteString'.
 hash :: B.ByteString -> Hash
 hash bs = show $ (C.hash bs :: C.SHA256)
@@ -16,7 +19,7 @@ hash bs = show $ (C.hash bs :: C.SHA256)
 -- its contents.
 put :: Handle -> IO Hash
 put h = do
-  dataDir <- D.getXdgDirectory D.XdgData "rainbowhash"
+  dataDir <- rainbowHashDir
   bs <- B.hGetContents h
   writeDataToFile dataDir bs
 
@@ -32,3 +35,10 @@ writeDataToFile dataDir bs = do
   B.writeFile filePath bs
   pure i
 
+-- | Returns 'True' if the given hash exists, 'False' otherwise.
+exists :: Hash -> IO Bool
+exists h = do
+  dataDir <- rainbowHashDir
+  let (d,f) = splitAt 2 h
+      filePath = dataDir </> d </> f
+  D.doesFileExist filePath
