@@ -8,6 +8,10 @@ import qualified Crypto.Hash as C
 
 type Hash = String
 
+-- | Return the 'String' of the SHA256 hash of the given 'ByteString'.
+hash :: B.ByteString -> Hash
+hash bs = show $ (C.hash bs :: C.SHA256)
+
 -- | Stores the contents of the file in storage and returns the SHA256 hash of
 -- its contents.
 put :: Handle -> IO Hash
@@ -16,8 +20,8 @@ put h = do
   bs <- B.hGetContents h
   writeDataToFile dataDir bs
 
--- | Write the data given by the `ByteString` to a file under the directory
--- given by `FilePath` returning the hash of the contents.
+-- | Write the data given by the 'ByteString' to a file under the directory
+-- given by 'FilePath' returning the hash of the contents.
 writeDataToFile :: FilePath -> B.ByteString -> IO Hash
 writeDataToFile dataDir bs = do
   let i = hash bs
@@ -28,5 +32,3 @@ writeDataToFile dataDir bs = do
   B.writeFile filePath bs
   pure i
 
-hash :: B.ByteString -> Hash
-hash bs = show $ (C.hash bs :: C.SHA256)
