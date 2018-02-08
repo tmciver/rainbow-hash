@@ -1,4 +1,7 @@
-module RainbowHash where
+module RainbowHash ( put
+                   , get
+                   , exists
+                   ) where
 
 import qualified Data.ByteString as B
 import System.FilePath
