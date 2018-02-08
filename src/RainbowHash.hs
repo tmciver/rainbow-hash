@@ -44,6 +44,8 @@ hashToFilePath h = do
 exists :: Hash -> IO Bool
 exists h = hashToFilePath h >>= D.doesFileExist
 
+-- | Retrieve the data (as 'ByteString'), if any, associated with the given
+-- hash.
 get :: Hash -> IO (Maybe B.ByteString)
 get h = do fp <- hashToFilePath h
            exists' <- D.doesFileExist fp
