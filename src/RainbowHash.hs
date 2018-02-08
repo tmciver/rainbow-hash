@@ -1,7 +1,6 @@
 module RainbowHash where
 
 import qualified Data.ByteString as B
-import System.IO (Handle)
 import System.FilePath
 import qualified System.Directory as D
 import qualified Crypto.Hash as C
@@ -15,12 +14,11 @@ rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
 hash :: B.ByteString -> Hash
 hash bs = show $ (C.hash bs :: C.SHA256)
 
--- | Stores the contents of the file in storage and returns the SHA256 hash of
--- its contents.
-put :: Handle -> IO Hash
-put h = do
+-- | Stores the given 'ByteString' in storage and returns the SHA256 hash of its
+-- contents.
+put :: B.ByteString -> IO Hash
+put bs = do
   dataDir <- rainbowHashDir
-  bs <- B.hGetContents h
   writeDataToFile dataDir bs
 
 -- | Write the data given by the 'ByteString' to a file under the directory
