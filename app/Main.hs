@@ -11,10 +11,12 @@ import qualified Data.ByteString.Lazy as LB
 
 main :: IO ()
 main = scotty 3000 $ do
-  get "/blob/:hash" $ do
-    h <- param "hash"
-    dataMaybe <- liftIO $ RH.get h
-    let strictDataMaybe = LB.fromStrict <$> dataMaybe
-    maybe nouFound' raw strictDataMaybe
-    where nouFound' :: ActionM ()
-          nouFound' = status status404
+  get "/blob/:hash" $ param "hash" >>= getBlob
+
+getBlob :: String -> ActionM ()
+getBlob h = do
+  dataMaybe <- liftIO $ RH.get h
+  let strictDataMaybe = LB.fromStrict <$> dataMaybe
+  maybe notFound' raw strictDataMaybe
+    where notFound' :: ActionM ()
+          notFound' = status status404
