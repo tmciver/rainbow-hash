@@ -43,6 +43,7 @@ packages:
 extra-deps:
 - hashing-0.1.0.1
 - scotty-0.11.0
+- blaze-html-0.9.0.1
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

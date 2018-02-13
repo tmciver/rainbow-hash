@@ -1,12 +1,14 @@
 module RainbowHash ( put
                    , get
                    , exists
+                   , allHashes
                    ) where
 
 import qualified Data.ByteString as B
 import System.FilePath
 import qualified System.Directory as D
 import qualified Crypto.Hash as C
+import Control.Monad (join)
 
 type Hash = String
 
@@ -55,3 +57,15 @@ get h = do fp <- hashToFilePath h
            if exists'
              then Just <$> B.readFile fp
              else pure Nothing
+
+allHashes :: IO [Hash]
+allHashes = do
+  dataDir <- rainbowHashDir
+  firstTwo <- D.listDirectory dataDir
+  allHashes' <- sequence $ fmap hashesForHashDir firstTwo
+  pure $ join allHashes'
+  where hashesForHashDir :: String -> IO [Hash]
+        hashesForHashDir firstTwo = do
+          dataDir <- rainbowHashDir
+          subHashes <- D.listDirectory $ dataDir </> firstTwo
+          pure $ fmap (firstTwo ++) subHashes

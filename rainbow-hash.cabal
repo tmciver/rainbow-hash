@@ -49,6 +49,7 @@ executable rainbow-hash-exe
       base >=4.7 && <5,
       rainbow-hash,
       scotty,
+      blaze-html,
       http-types,
       bytestring
   other-modules:
