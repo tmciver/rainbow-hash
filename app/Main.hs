@@ -16,8 +16,19 @@ import Data.String (fromString)
 
 main :: IO ()
 main = scotty 3000 $ do
+  get "/" homeView
   get "/blobs" showAllHashes
   get "/blob/:hash" $ param "hash" >>= getBlob
+
+homeView :: ActionM ()
+homeView = html $ renderHtml homeHtml
+
+homeHtml :: H.Html
+homeHtml = H.docTypeHtml $ do
+  H.head $ do
+    H.title "Rainbow Hash"
+  H.body $
+    ((H.a . H.toHtml) ("See a list of all blobs." :: String)) H.! href "/blobs"
 
 getBlob :: String -> ActionM ()
 getBlob h = do
