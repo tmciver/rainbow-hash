@@ -12,7 +12,6 @@ import qualified RainbowHash as RH
 import Data.Maybe (maybe)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class
-import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LB
 import Data.String (fromString)
 
@@ -53,10 +52,10 @@ handleUpload :: ActionM ()
 handleUpload = do
   fs <- files
   let (_, fi) = head fs
-      fname = BS.unpack $ fileName fi
+      --fname = BS.unpack $ fileName fi
       fcontent = LB.toStrict $ fileContent fi
-  h <- liftIO $ RH.put $ fcontent
-  html $ renderHtml $ H.toHtml ("Wrote file: " ++ fname ++ " as hash: " ++ h)
+  _ <- liftIO $ RH.put $ fcontent
+  redirect "/"
 
 getBlob :: String -> ActionM ()
 getBlob h = do
