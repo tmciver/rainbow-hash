@@ -27,7 +27,7 @@ template :: String -> H.Html -> H.Html
 template title' body' = H.docTypeHtml $ do
   H.head $ do
     H.title $ fromString $ "Rainbow Hash - " ++ title'
-  H.body body'
+  H.body $ homeLink >> H.br >> body'
 
 homeView :: ActionM ()
 homeView = html $ renderHtml homeHtml
@@ -36,6 +36,9 @@ homeHtml :: H.Html
 homeHtml = template "Home" $ do
   contentListLink
   fileUploadForm
+
+homeLink :: H.Html
+homeLink = ((H.a . H.toHtml) ("Home" :: String)) H.! href "/"
 
 contentListLink :: H.Html
 contentListLink = ((H.a . H.toHtml) ("See a list of all blobs." :: String)) H.! href "/blobs"
