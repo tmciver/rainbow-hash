@@ -4,6 +4,7 @@ module Main where
 
 import Web.Scotty
 import Network.HTTP.Types (status404)
+import Network.Wai.Parse
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 import Text.Blaze.Html.Renderer.Text (renderHtml)
@@ -11,6 +12,7 @@ import qualified RainbowHash as RH
 import Data.Maybe (maybe)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LB
 import Data.String (fromString)
 
@@ -19,6 +21,13 @@ main = scotty 3000 $ do
   get "/" homeView
   get "/blobs" showAllHashes
   get "/blob/:hash" $ param "hash" >>= getBlob
+  post "/blobs" $ do
+    fs <- files
+    let (_, fi) = head fs
+        fname = BS.unpack $ fileName fi
+        fcontent = LB.toStrict $ fileContent fi
+    h <- liftIO $ RH.put $ fcontent
+    html $ renderHtml $ H.toHtml ("Wrote file: " ++ fname ++ " as hash: " ++ h)
 
 homeView :: ActionM ()
 homeView = html $ renderHtml homeHtml
