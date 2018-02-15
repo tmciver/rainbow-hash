@@ -21,13 +21,7 @@ main = scotty 3000 $ do
   get "/" homeView
   get "/blobs" showAllHashes
   get "/blob/:hash" $ param "hash" >>= getBlob
-  post "/blobs" $ do
-    fs <- files
-    let (_, fi) = head fs
-        fname = BS.unpack $ fileName fi
-        fcontent = LB.toStrict $ fileContent fi
-    h <- liftIO $ RH.put $ fcontent
-    html $ renderHtml $ H.toHtml ("Wrote file: " ++ fname ++ " as hash: " ++ h)
+  post "/blobs" handleUpload
 
 homeView :: ActionM ()
 homeView = html $ renderHtml homeHtml
@@ -48,6 +42,15 @@ fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! 
   H.input H.! type_ "file" H.! name "file"
   H.br
   H.input H.! type_ "submit"
+
+handleUpload :: ActionM ()
+handleUpload = do
+  fs <- files
+  let (_, fi) = head fs
+      fname = BS.unpack $ fileName fi
+      fcontent = LB.toStrict $ fileContent fi
+  h <- liftIO $ RH.put $ fcontent
+  html $ renderHtml $ H.toHtml ("Wrote file: " ++ fname ++ " as hash: " ++ h)
 
 getBlob :: String -> ActionM ()
 getBlob h = do
