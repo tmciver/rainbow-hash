@@ -23,16 +23,19 @@ main = scotty 3000 $ do
   get "/blob/:hash" $ param "hash" >>= getBlob
   post "/blobs" handleUpload
 
+template :: String -> H.Html -> H.Html
+template title' body' = H.docTypeHtml $ do
+  H.head $ do
+    H.title $ fromString $ "Rainbow Hash - " ++ title'
+  H.body body'
+
 homeView :: ActionM ()
 homeView = html $ renderHtml homeHtml
 
 homeHtml :: H.Html
-homeHtml = H.docTypeHtml $ do
-  H.head $ do
-    H.title "Rainbow Hash"
-  H.body $ do
-    contentListLink
-    fileUploadForm
+homeHtml = template "Home" $ do
+  contentListLink
+  fileUploadForm
 
 contentListLink :: H.Html
 contentListLink = ((H.a . H.toHtml) ("See a list of all blobs." :: String)) H.! href "/blobs"
@@ -66,12 +69,9 @@ showAllHashes = do
   html $ renderHtml $ hashesHtmlView allHashes
 
 hashesHtmlView :: [String] -> H.Html
-hashesHtmlView hashes = H.docTypeHtml $ do
-  H.head $ do
-    H.title "All Blobs"
-  H.body $ do
-    H.p "A list of all blobs:"
-    H.ul $ forM_ hashes (H.li . hashToAnchor)
+hashesHtmlView hashes = template "Content" $ do
+  H.p "A list of all blobs:"
+  H.ul $ forM_ hashes (H.li . hashToAnchor)
 
 hashToAnchor :: String -> H.Html
 hashToAnchor h = ((H.a . H.toHtml) h) H.! href (fromString ("/blob/" ++ h))
