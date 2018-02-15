@@ -27,8 +27,12 @@ homeHtml :: H.Html
 homeHtml = H.docTypeHtml $ do
   H.head $ do
     H.title "Rainbow Hash"
-  H.body $
+  H.body $ do
     ((H.a . H.toHtml) ("See a list of all blobs." :: String)) H.! href "/blobs"
+    H.form H.! method "post" H.! enctype "multipart/form-data" H.! action "/blobs" $ do
+      H.input H.! type_ "file" H.! name "file"
+      H.br
+      H.input H.! type_ "submit"
 
 getBlob :: String -> ActionM ()
 getBlob h = do
