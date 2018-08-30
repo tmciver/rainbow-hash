@@ -24,6 +24,11 @@ dependencies:
 
 library:
   source-dirs: src
+  dependencies:
+  - bytestring
+  - directory
+  - filepath
+  - hashing
 
 executables:
   rainbow-hash-exe:
@@ -35,6 +40,11 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - rainbow-hash
+    - scotty
+    - blaze-html
+    - http-types
+    - bytestring
+    - wai-extra
 
 tests:
   rainbow-hash-test:
