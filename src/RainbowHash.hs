@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module RainbowHash ( put
                    , get
                    , exists
@@ -9,6 +10,9 @@ import System.FilePath
 import qualified System.Directory as D
 import qualified Crypto.Hash as C
 import Control.Monad (join)
+import Magic
+import Data.List.Split (splitOn)
+import Data.Text (pack, unpack, strip, stripPrefix)
 
 type Hash = String
 
@@ -25,6 +29,33 @@ put :: B.ByteString -> IO Hash
 put bs = do
   dataDir <- rainbowHashDir
   writeDataToFile dataDir bs
+
+type MediaType = String
+type Charset = String
+type MediaInfo = (Maybe MediaType, Maybe Charset)
+
+parseMediaInfo :: String -> MediaInfo
+parseMediaInfo s = case splitOn ";" s of
+  [m] -> (parse m, Nothing)
+  m:c:[] -> (parse m, parseCharset c)
+  _ -> (Nothing, Nothing)
+  where parse :: String -> Maybe String
+        parse [] = Nothing
+        parse s = Just s
+        stripCharset :: String -> Maybe Charset
+        stripCharset s = do
+          let ss = strip (pack s)
+          cs <- stripPrefix "charset=" ss
+          return $ unpack cs
+        parseCharset :: String -> Maybe Charset
+        parseCharset s = (parse s) >>= stripCharset
+
+getMediaInfo :: FilePath -> IO MediaInfo
+getMediaInfo file = do
+  magic <- magicOpen [MagicMime]
+  magicLoadDefault magic
+  mime <- magicFile magic file
+  return $ parseMediaInfo mime
 
 -- | Write the data given by the 'ByteString' to a file under the directory
 -- given by 'FilePath' returning the hash of the contents.

@@ -21,6 +21,7 @@ description:         Please see the README on Github at <https://github.com/tmci
 
 dependencies:
 - base >= 4.7 && < 5
+- magic
 
 library:
   source-dirs: src
@@ -29,6 +30,8 @@ library:
   - directory
   - filepath
   - hashing
+  - split
+  - text
 
 executables:
   rainbow-hash-exe:
