@@ -11,6 +11,8 @@ import qualified System.Directory as D
 import qualified Crypto.Hash as C
 import Control.Monad (join)
 import Magic
+import Data.Bool (not)
+import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
 import Data.Text (pack, unpack, strip, stripPrefix)
 import Data.Maybe (fromMaybe)
@@ -110,5 +112,6 @@ allHashes = do
   where hashesForHashDir :: String -> IO [Hash]
         hashesForHashDir firstTwo = do
           dataDir <- rainbowHashDir
-          subHashes <- D.listDirectory $ dataDir </> firstTwo
+          allFiles <- D.listDirectory $ dataDir </> firstTwo
+          let subHashes = filter (not . (isSuffixOf "metadata.txt")) allFiles
           pure $ fmap (firstTwo ++) subHashes
