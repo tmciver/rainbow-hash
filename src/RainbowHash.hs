@@ -13,6 +13,7 @@ import Control.Monad (join)
 import Magic
 import Data.List.Split (splitOn)
 import Data.Text (pack, unpack, strip, stripPrefix)
+import Data.Maybe (fromMaybe)
 
 type Hash = String
 
@@ -28,7 +29,9 @@ hash bs = show $ (C.hash bs :: C.SHA256)
 put :: B.ByteString -> IO Hash
 put bs = do
   dataDir <- rainbowHashDir
-  writeDataToFile dataDir bs
+  (h, filePath) <- writeDataToFile dataDir bs
+  writeMetaDataToFile filePath
+  return h
 
 type MediaType = String
 type Charset = String
@@ -59,7 +62,7 @@ getMediaInfo file = do
 
 -- | Write the data given by the 'ByteString' to a file under the directory
 -- given by 'FilePath' returning the hash of the contents.
-writeDataToFile :: FilePath -> B.ByteString -> IO Hash
+writeDataToFile :: FilePath -> B.ByteString -> IO (Hash, FilePath)
 writeDataToFile dataDir bs = do
   let i = hash bs
       (d,f) = splitAt 2 i
@@ -67,7 +70,16 @@ writeDataToFile dataDir bs = do
       filePath = dirPath </> f
   D.createDirectoryIfMissing True dirPath
   B.writeFile filePath bs
-  pure i
+  pure (i, filePath)
+
+writeMetaDataToFile :: FilePath -> IO ()
+writeMetaDataToFile fp = do
+  (maybeMT, maybeCS) <- getMediaInfo fp
+  let mediaType = fromMaybe "unknown" maybeMT
+      charset = fromMaybe "unknown" maybeCS
+      str = "content-type: " ++ mediaType ++ "\n" ++ "charset: " ++ charset ++ "\n"
+      metaFile = fp ++ "_metadata.txt"
+  appendFile metaFile str
 
 hashToFilePath :: Hash -> IO FilePath
 hashToFilePath h = do
