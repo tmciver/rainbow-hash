@@ -34,9 +34,9 @@ library:
   - text
 
 executables:
-  rainbow-hash-exe:
+  rh-server:
     main:                Main.hs
-    source-dirs:         app
+    source-dirs:         server
     ghc-options:
     - -threaded
     - -rtsopts
