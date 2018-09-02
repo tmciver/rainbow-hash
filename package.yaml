@@ -49,6 +49,19 @@ executables:
     - bytestring
     - wai-extra
 
+  rh-cli:
+    main:                Main.hs
+    source-dirs:         cli
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - rainbow-hash
+    - directory
+    - filepath
+    - bytestring
+
 tests:
   rainbow-hash-test:
     main:                Spec.hs
