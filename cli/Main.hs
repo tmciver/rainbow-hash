@@ -30,18 +30,15 @@ listFilesRecursively fp = do
     return $ join ffs
     else return [fp]
 
-putFile :: FilePath -> IO ()
-putFile fp = do
-  putStrLn ("Attempting to put file " ++ fp)
-  bs <- B.readFile fp
-  h <- put bs
+putFile' :: FilePath -> IO ()
+putFile' fp = do
+  h <- putFile fp
   putStrLn ("Stored file whose content hash is: " ++ h)
-  return ()
 
 putFilesFromDirectory :: FilePath -> IO ()
 putFilesFromDirectory fp = do
   fs <- listFilesRecursively fp
-  _ <- traverse putFile fs
+  _ <- traverse putFile' fs
   return ()
 
 main :: IO ()

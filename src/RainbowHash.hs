@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module RainbowHash ( put
+                   , putFile
                    , get
+                   , getFile
                    , exists
                    , allHashes
                    ) where
@@ -25,6 +27,10 @@ rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
 -- | Return the 'String' of the SHA256 hash of the given 'ByteString'.
 hash :: B.ByteString -> Hash
 hash bs = show $ (C.hash bs :: C.SHA256)
+
+-- |Adds the file at the given 'FilePath' and returns the hash.
+putFile :: FilePath -> IO Hash
+putFile fp = B.readFile fp >>= put
 
 -- | Stores the given 'ByteString' in storage and returns the SHA256 hash of its
 -- contents.
@@ -94,14 +100,22 @@ hashToFilePath h = do
 exists :: Hash -> IO Bool
 exists h = hashToFilePath h >>= D.doesFileExist
 
+-- |Returns the 'FilePath' of the file with the given hash, if it exists.
+getFile :: Hash -> IO (Maybe FilePath)
+getFile h = do
+  fp <- hashToFilePath h
+  exists' <- D.doesFileExist fp
+  if exists' then return $ Just fp
+    else return Nothing
+
 -- | Retrieve the data (as 'ByteString'), if any, associated with the given
 -- hash.
 get :: Hash -> IO (Maybe B.ByteString)
-get h = do fp <- hashToFilePath h
-           exists' <- D.doesFileExist fp
-           if exists'
-             then Just <$> B.readFile fp
-             else pure Nothing
+get h = do
+  maybeFp <- getFile h
+  case maybeFp of
+    Just fp -> fmap Just (B.readFile fp)
+    Nothing -> return Nothing
 
 allHashes :: IO [Hash]
 allHashes = do
