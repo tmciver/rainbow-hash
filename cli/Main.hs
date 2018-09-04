@@ -4,8 +4,24 @@ import RainbowHash
 import System.IO
 import System.FilePath
 import System.Directory (doesDirectoryExist, getCurrentDirectory, listDirectory)
-import qualified Data.ByteString as B
 import Control.Monad (join)
+import qualified System.Directory as D
+
+rainbowHashDir :: IO FilePath
+rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
+
+-- |Asks the user for the directory to which data will be stored.
+getStoreDir :: IO FilePath
+getStoreDir = do
+  defaultStoreDir <- rainbowHashDir
+  putStr ("Enter a storage directory [" ++ defaultStoreDir ++ "]: ")
+  hFlush stdout
+  d <- getLine
+  let tmpDir = if null d then defaultStoreDir else d
+  dirExists <- doesDirectoryExist tmpDir
+  let dir = if dirExists then tmpDir
+            else error ("Error: " ++ tmpDir ++ " does not exist.")
+  return dir
 
 -- |Asks the user for the directory from which files will be imported.
 getSourceDir :: IO FilePath
@@ -30,19 +46,24 @@ listFilesRecursively fp = do
     return $ join ffs
     else return [fp]
 
-putFile' :: FilePath -> IO ()
-putFile' fp = do
-  h <- putFile fp
+putFile' :: FilePath -- ^Path to storage directory.
+         -> FilePath -- ^Path to the file to store.
+         -> IO ()
+putFile' storeDir fp = do
+  h <- putFile storeDir fp
   putStrLn ("Stored file whose content hash is: " ++ h)
 
-putFilesFromDirectory :: FilePath -> IO ()
-putFilesFromDirectory fp = do
-  fs <- listFilesRecursively fp
-  _ <- traverse putFile' fs
+putFilesFromDirectory :: FilePath -- ^Path to storage directory.
+                      -> FilePath -- ^Path to source directory.
+                      -> IO ()
+putFilesFromDirectory storeDir sourceDir = do
+  fs <- listFilesRecursively sourceDir
+  _ <- traverse (putFile' storeDir) fs
   return ()
 
 main :: IO ()
 main = do
-  sd <- getSourceDir
-  putFilesFromDirectory sd
+  storeDir <- getStoreDir
+  sourceDir <- getSourceDir
+  putFilesFromDirectory storeDir sourceDir
   putStrLn "Done."

@@ -5,6 +5,7 @@ module Main where
 import Web.Scotty
 import Network.HTTP.Types (status404)
 import Network.Wai.Parse
+
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 import Text.Blaze.Html.Renderer.Text (renderHtml)
@@ -14,6 +15,10 @@ import Control.Monad (forM_)
 import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as LB
 import Data.String (fromString)
+import qualified System.Directory as D
+
+storageDir :: ActionM FilePath
+storageDir = liftIO $ D.getXdgDirectory D.XdgData "rainbowhash"
 
 main :: IO ()
 main = scotty 3000 $ do
@@ -50,16 +55,18 @@ fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! 
 
 handleUpload :: ActionM ()
 handleUpload = do
+  storage <- storageDir
   fs <- files
   let (_, fi) = head fs
       --fname = BS.unpack $ fileName fi
       fcontent = LB.toStrict $ fileContent fi
-  _ <- liftIO $ RH.put $ fcontent
+  _ <- liftIO $ RH.put storage fcontent
   redirect "/"
 
 getBlob :: String -> ActionM ()
 getBlob h = do
-  dataMaybe <- liftIO $ RH.get h
+  storage <- storageDir
+  dataMaybe <- liftIO $ RH.get storage h
   let strictDataMaybe = LB.fromStrict <$> dataMaybe
   maybe notFound' raw strictDataMaybe
     where notFound' :: ActionM ()
@@ -67,7 +74,8 @@ getBlob h = do
 
 showAllHashes :: ActionM ()
 showAllHashes = do
-  allHashes <- liftIO RH.allHashes
+  storage <- storageDir
+  allHashes <- liftIO $ RH.allHashes storage
   html $ renderHtml $ hashesHtmlView allHashes
 
 hashesHtmlView :: [String] -> H.Html

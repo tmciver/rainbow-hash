@@ -43,6 +43,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - rainbow-hash
+    - directory
     - scotty
     - blaze-html
     - http-types
