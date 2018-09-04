@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
-module RainbowHash ( put
-                   , putFile
+module RainbowHash ( getFile
                    , get
-                   , getFile
+                   , putFile
+                   , put
                    , exists
                    , allHashes
                    ) where
@@ -24,6 +24,27 @@ type Hash = String
 -- | Return the 'String' of the SHA256 hash of the given 'ByteString'.
 hash :: B.ByteString -> Hash
 hash bs = show $ (C.hash bs :: C.SHA256)
+
+-- |Returns the 'FilePath' of the file with the given hash, if it exists.
+getFile :: FilePath            -- ^Path to storage directory.
+        -> Hash                -- ^The hash of the file to retrieve.
+        -> IO (Maybe FilePath) -- ^The 'FilePath' of the file with the given hash, if it exists.
+getFile store h = do
+  fp <- hashToFilePath store h
+  exists' <- D.doesFileExist fp
+  if exists' then return $ Just fp
+    else return Nothing
+
+-- | Retrieve the data (as 'ByteString'), if any, associated with the given
+-- hash.
+get :: FilePath                -- ^Path to storage directory.
+    -> Hash                    -- ^The hash of the file to retrieve.
+    -> IO (Maybe B.ByteString) -- ^The raw data of the file with the given hash, if it exists.
+get store h = do
+  maybeFp <- getFile store h
+  case maybeFp of
+    Just fp -> fmap Just (B.readFile fp)
+    Nothing -> return Nothing
 
 -- |Adds the file at the given 'FilePath' and returns the hash.
 putFile :: FilePath -- ^Path to storage directory.
@@ -102,27 +123,6 @@ exists :: FilePath -- ^Path to storage directory.
        -> Hash     -- ^The hash of a file.
        -> IO Bool  -- ^True, if a file with the given hash exists, False otherwise.
 exists storeDir h = hashToFilePath storeDir h >>= D.doesFileExist
-
--- |Returns the 'FilePath' of the file with the given hash, if it exists.
-getFile :: FilePath            -- ^Path to storage directory.
-        -> Hash                -- ^The hash of the file to retrieve.
-        -> IO (Maybe FilePath) -- ^The 'FilePath' of the file with the given hash, if it exists.
-getFile store h = do
-  fp <- hashToFilePath store h
-  exists' <- D.doesFileExist fp
-  if exists' then return $ Just fp
-    else return Nothing
-
--- | Retrieve the data (as 'ByteString'), if any, associated with the given
--- hash.
-get :: FilePath                -- ^Path to storage directory.
-    -> Hash                    -- ^The hash of the file to retrieve.
-    -> IO (Maybe B.ByteString) -- ^The raw data of the file with the given hash, if it exists.
-get store h = do
-  maybeFp <- getFile store h
-  case maybeFp of
-    Just fp -> fmap Just (B.readFile fp)
-    Nothing -> return Nothing
 
 allHashes :: FilePath  -- ^Path to storage directory.
           -> IO [Hash] -- ^A list of all the stored hashes.
