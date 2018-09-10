@@ -17,8 +17,8 @@ import qualified Data.ByteString.Lazy as LB
 import Data.String (fromString)
 import qualified System.Directory as D
 
-storageDir :: ActionM FilePath
-storageDir = liftIO $ D.getXdgDirectory D.XdgData "rainbowhash"
+rhEnv :: ActionM RH.Env
+rhEnv = liftIO $ RH.Env <$> D.getXdgDirectory D.XdgData "rainbowhash"
 
 main :: IO ()
 main = scotty 3000 $ do
@@ -55,18 +55,17 @@ fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! 
 
 handleUpload :: ActionM ()
 handleUpload = do
-  storage <- storageDir
   fs <- files
   let (_, fi) = head fs
-      --fname = BS.unpack $ fileName fi
       fcontent = LB.toStrict $ fileContent fi
-  _ <- liftIO $ RH.put storage fcontent
+  env <- rhEnv
+  _ <- liftIO $ RH.runWithEnv (RH.put fcontent) env
   redirect "/"
 
 getBlob :: String -> ActionM ()
 getBlob h = do
-  storage <- storageDir
-  dataMaybe <- liftIO $ RH.get storage h
+  env <- rhEnv
+  dataMaybe <- liftIO $ RH.runWithEnv (RH.get h) env
   let strictDataMaybe = LB.fromStrict <$> dataMaybe
   maybe notFound' raw strictDataMaybe
     where notFound' :: ActionM ()
@@ -74,8 +73,8 @@ getBlob h = do
 
 showAllHashes :: ActionM ()
 showAllHashes = do
-  storage <- storageDir
-  allHashes <- liftIO $ RH.allHashes storage
+  env <- rhEnv
+  allHashes <- liftIO $ RH.runWithEnv RH.allHashes env
   html $ renderHtml $ hashesHtmlView allHashes
 
 hashesHtmlView :: [String] -> H.Html

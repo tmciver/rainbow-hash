@@ -50,7 +50,8 @@ putFile' :: FilePath -- ^Path to storage directory.
          -> FilePath -- ^Path to the file to store.
          -> IO ()
 putFile' storeDir fp = do
-  h <- putFile storeDir fp
+  let env = Env storeDir
+  h <- runWithEnv (putFile fp) env
   putStrLn ("Stored file whose content hash is: " ++ h)
 
 putFilesFromDirectory :: FilePath -- ^Path to storage directory.
