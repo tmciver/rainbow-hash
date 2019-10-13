@@ -17,8 +17,11 @@ import qualified Data.ByteString.Lazy as LB
 import Data.String (fromString)
 import qualified System.Directory as D
 
+storageDir :: FilePath
+storageDir = "/rainbowhash"
+
 rhEnv :: ActionM RH.Env
-rhEnv = liftIO $ RH.Env <$> D.getXdgDirectory D.XdgData "rainbowhash"
+rhEnv = pure $ RH.Env storageDir
 
 main :: IO ()
 main = scotty 3000 $ do

@@ -9,6 +9,8 @@ COPY . .
 RUN stack setup
 RUN stack build
 
+RUN mkdir /rainbowhash
+
 EXPOSE 3000
 
 CMD ["stack", "exec", "rh-server"]
