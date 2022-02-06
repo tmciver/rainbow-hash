@@ -5,12 +5,10 @@ module Main where
 import Web.Scotty
 import Network.HTTP.Types (status404)
 import Network.Wai.Parse
-
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 import Text.Blaze.Html.Renderer.Text (renderHtml)
 import qualified RainbowHash as RH
-import Data.Maybe (maybe)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as LB
@@ -21,11 +19,16 @@ rhEnv :: ActionM RH.Env
 rhEnv = liftIO $ RH.Env <$> D.getXdgDirectory D.XdgData "rainbowhash"
 
 main :: IO ()
-main = scotty 3000 $ do
-  get "/" homeView
-  get "/blobs" showAllHashes
-  get "/blob/:hash" $ param "hash" >>= getBlob
-  post "/blobs" handleUpload
+main = do
+  createLocalStorageDir
+  scotty 3000 $ do
+    get "/" homeView
+    get "/blobs" showAllHashes
+    get "/blob/:hash" $ param "hash" >>= getBlob
+    post "/blobs" handleUpload
+
+createLocalStorageDir :: IO ()
+createLocalStorageDir = D.getXdgDirectory D.XdgData "rainbowhash" >>= D.createDirectoryIfMissing True
 
 template :: String -> H.Html -> H.Html
 template title' body' = H.docTypeHtml $ do
