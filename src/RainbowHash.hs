@@ -9,6 +9,7 @@ module RainbowHash ( getFile
                    , allHashes
                    , runWithEnv
                    , Env(..)
+                   , Hash
                    ) where
 
 import qualified Data.ByteString as B

@@ -13,7 +13,9 @@ import Control.Monad (forM_)
 import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as LB
 import Data.String (fromString)
+import Data.Text.Lazy (Text, pack, toStrict)
 import qualified System.Directory as D
+import Network.HTTP.Types.Status (status201)
 
 rhEnv :: ActionM RH.Env
 rhEnv = liftIO $ RH.Env <$> D.getXdgDirectory D.XdgData "rainbowhash"
@@ -62,8 +64,10 @@ handleUpload = do
   let (_, fi) = head fs
       fcontent = LB.toStrict $ fileContent fi
   env <- rhEnv
-  _ <- liftIO $ RH.runWithEnv (RH.put fcontent) env
-  redirect "/"
+  hash <- liftIO $ RH.runWithEnv (RH.put fcontent) env
+  status status201
+  addHeader "Location" (hashToUrl hash)
+  homeView
 
 getBlob :: String -> ActionM ()
 getBlob h = do
@@ -85,5 +89,8 @@ hashesHtmlView hashes = template "Content" $ do
   H.p "A list of all blobs:"
   H.ul $ forM_ hashes (H.li . hashToAnchor)
 
-hashToAnchor :: String -> H.Html
-hashToAnchor h = ((H.a . H.toHtml) h) H.! href (fromString ("/blob/" ++ h))
+hashToUrl :: RH.Hash -> Text
+hashToUrl = pack . ("/blob/" ++)
+
+hashToAnchor :: RH.Hash -> H.Html
+hashToAnchor h = ((H.a . H.toHtml) h) H.! href (H.textValue $ toStrict $ hashToUrl h)

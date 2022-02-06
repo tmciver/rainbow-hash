@@ -45,11 +45,13 @@ executables:
     dependencies:
     - rainbow-hash
     - directory
+    - http-types
     - scotty
     - blaze-html
     - http-types
     - bytestring
     - wai-extra
+    - text
 
   rh-cli:
     main:                Main.hs
