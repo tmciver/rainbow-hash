@@ -1,18 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-module RainbowHash ( getFile
-                   , get
-                   , putFile
-                   , put
-                   , exists
-                   , allHashes
-                   , runWithEnv
-                   , Env(..)
-                   , Hash
-                   ) where
+module RainbowHash
+  ( getFile
+  , get
+  , putFile
+  , put
+  , exists
+  , allHashes
+  , runWithEnv
+  , Env(..)
+  , Hash
+  ) where
 
 import qualified Data.ByteString as B
+import Data.ByteString (ByteString)
 import System.FilePath
 import qualified System.Directory as D
 import qualified Crypto.Hash as C
@@ -27,9 +31,40 @@ import Control.Monad.Trans.Reader
 import Control.Monad.IO.Class
 
 type Hash = String
+
+newtype FileId = FileId { getHash :: Hash }
+
 data Env = Env { storageDir :: FilePath }
 newtype App a = App { runApp :: ReaderT Env IO a }
               deriving (Functor, Applicative, Monad, MonadIO)
+
+class Monad m => FileGet m where
+  getFile :: FileId -> m (Maybe ByteString)
+  fileExists :: FileId -> m Bool
+
+-- This is a low-level class used for implementation.  If you want to put a file
+-- in the store, use putFileByteString.
+class Monad m => FilePut m v where
+  putFileAtHash :: Hash -> v -> m FileId
+
+putFileByteString
+  :: ( FileGet m
+     , FilePut m ByteString
+     )
+  => ByteString
+  -> m FileId
+putFileByteString bs = do
+  -- Get the file's hash
+  let hash = calcHash bs
+      fileId = FileId hash
+
+  -- See if the file exists already.
+  exists <- fileExists fileId
+
+  -- Put the file in the store if it doesn't already exist.
+  if exists
+    then pure fileId
+    else putFileAtHash hash bs
 
 runWithEnv :: App a -> Env -> IO a
 runWithEnv app = (runReaderT $ runApp app)
@@ -39,13 +74,13 @@ getStorageDir :: App FilePath
 getStorageDir = App $ reader storageDir
 
 -- | Return the 'String' of the SHA256 hash of the given 'ByteString'.
-hash :: B.ByteString -> Hash
-hash bs = show $ (C.hash bs :: C.SHA256)
+calcHash :: B.ByteString -> Hash
+calcHash bs = show $ (C.hash bs :: C.SHA256)
 
 -- |Returns the 'FilePath' of the file with the given hash, if it exists.
-getFile :: Hash                 -- ^The hash of the file to retrieve.
+getFile' :: Hash                 -- ^The hash of the file to retrieve.
         -> App (Maybe FilePath) -- ^The 'FilePath' of the file with the given hash, if it exists.
-getFile h = do
+getFile' h = do
   fp <- hashToFilePath h
   exists' <- liftIO $ D.doesFileExist fp
   if exists' then return $ Just fp
@@ -56,7 +91,7 @@ getFile h = do
 get :: Hash                     -- ^The hash of the file to retrieve.
     -> App (Maybe B.ByteString) -- ^The raw data of the file with the given hash, if it exists.
 get h = do
-  maybeFp <- getFile h
+  maybeFp <- getFile' h
   case maybeFp of
     Just fp ->  liftIO $ Just <$> (B.readFile fp)
     Nothing -> return Nothing
@@ -109,7 +144,7 @@ writeDataToFile :: B.ByteString         -- ^Data to write.
                 -> App (Hash, FilePath)
 writeDataToFile bs = do
   storageDir <- getStorageDir
-  let i = hash bs
+  let i = calcHash bs
       (d,f) = splitAt 2 i
       dirPath = storageDir </> d
       filePath = dirPath </> f
