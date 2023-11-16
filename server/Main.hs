@@ -1,24 +1,32 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Main where
 
-import Web.Scotty
+import Protolude hiding (get, put)
+import Prelude (String)
+
+import Web.Scotty hiding (put)
 import Network.HTTP.Types (status404)
 import Network.Wai.Parse
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 import Text.Blaze.Html.Renderer.Text (renderHtml)
-import qualified RainbowHash as RH
 import Control.Monad (forM_)
 import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as LB
 import Data.String (fromString)
-import Data.Text.Lazy (Text, pack, toStrict)
+import qualified Data.Text.Lazy as TL
 import qualified System.Directory as D
 import Network.HTTP.Types.Status (status201)
 
-rhEnv :: ActionM RH.Env
-rhEnv = liftIO $ RH.Env <$> D.getXdgDirectory D.XdgData "rainbowhash"
+import qualified RainbowHash as RH
+import RainbowHash (Hash, allHashes, put)
+import RainbowHash.App (runWithEnv)
+import RainbowHash.Env (Env(..))
+
+rhEnv :: ActionM Env
+rhEnv = liftIO $ Env <$> D.getXdgDirectory D.XdgData "rainbowhash"
 
 main :: IO ()
 main = do
@@ -61,18 +69,20 @@ fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! 
 handleUpload :: ActionM ()
 handleUpload = do
   fs <- files
-  let (_, fi) = head fs
-      fcontent = LB.toStrict $ fileContent fi
-  env <- rhEnv
-  hash <- liftIO $ RH.runWithEnv (RH.put fcontent) env
-  status status201
-  addHeader "Location" (hashToUrl hash)
-  homeView
+  case headMay fs of
+    Nothing -> pure ()
+    Just (_, fi) -> do
+      let fcontent = LB.toStrict $ fileContent fi
+      env <- rhEnv
+      hash <- liftIO $ runWithEnv (put fcontent) env
+      status status201
+      addHeader "Location" (hashToUrl hash)
+      homeView
 
 getBlob :: String -> ActionM ()
 getBlob h = do
   env <- rhEnv
-  dataMaybe <- liftIO $ RH.runWithEnv (RH.get h) env
+  dataMaybe <- liftIO $ runWithEnv (RH.get h) env
   let strictDataMaybe = LB.fromStrict <$> dataMaybe
   maybe notFound' raw strictDataMaybe
     where notFound' :: ActionM ()
@@ -81,7 +91,7 @@ getBlob h = do
 showAllHashes :: ActionM ()
 showAllHashes = do
   env <- rhEnv
-  allHashes <- liftIO $ RH.runWithEnv RH.allHashes env
+  allHashes <- liftIO $ runWithEnv allHashes env
   html $ renderHtml $ hashesHtmlView allHashes
 
 hashesHtmlView :: [String] -> H.Html
@@ -89,8 +99,8 @@ hashesHtmlView hashes = template "Content" $ do
   H.p "A list of all blobs:"
   H.ul $ forM_ hashes (H.li . hashToAnchor)
 
-hashToUrl :: RH.Hash -> Text
-hashToUrl = pack . ("/blob/" ++)
+hashToUrl :: Hash -> TL.Text
+hashToUrl = TL.pack . ("/blob/" ++)
 
-hashToAnchor :: RH.Hash -> H.Html
+hashToAnchor :: Hash -> H.Html
 hashToAnchor h = ((H.a . H.toHtml) h) H.! href (H.textValue $ toStrict $ hashToUrl h)

@@ -7,6 +7,9 @@ import System.Directory (doesDirectoryExist, getCurrentDirectory, listDirectory)
 import Control.Monad (join)
 import qualified System.Directory as D
 
+import RainbowHash.Env (Env(..))
+import RainbowHash.App (runWithEnv)
+
 rainbowHashDir :: IO FilePath
 rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
 

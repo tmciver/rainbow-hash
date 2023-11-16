@@ -2,6 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module RainbowHash
   ( getFile
@@ -10,10 +11,11 @@ module RainbowHash
   , put
   , exists
   , allHashes
-  , runWithEnv
-  , Env(..)
   , Hash
   ) where
+
+import Protolude hiding (get, put)
+import Prelude (String)
 
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
@@ -27,16 +29,13 @@ import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
 import Data.Text (pack, unpack, strip, stripPrefix)
 import Data.Maybe (fromMaybe)
-import Control.Monad.Trans.Reader
-import Control.Monad.IO.Class
+
+import RainbowHash.App (App(..), runWithEnv)
+import RainbowHash.Env (Env(..))
 
 type Hash = String
 
 newtype FileId = FileId { getHash :: Hash }
-
-data Env = Env { storageDir :: FilePath }
-newtype App a = App { runApp :: ReaderT Env IO a }
-              deriving (Functor, Applicative, Monad, MonadIO)
 
 class Monad m => FileGet m where
   getFile :: FileId -> m (Maybe ByteString)
@@ -65,9 +64,6 @@ putFileByteString bs = do
   if exists
     then pure fileId
     else putFileAtHash hash bs
-
-runWithEnv :: App a -> Env -> IO a
-runWithEnv app = (runReaderT $ runApp app)
 
 -- |Return the configured storage directory in the 'App' Monad.
 getStorageDir :: App FilePath
@@ -160,7 +156,7 @@ writeMetaDataToFile fp = do
       charset = fromMaybe "unknown" maybeCS
       str = "content-type: " ++ mediaType ++ "\n" ++ "charset: " ++ charset ++ "\n"
       metaFile = fp ++ "_metadata.txt"
-  liftIO $ appendFile metaFile str
+  liftIO $ appendFile metaFile (pack str)
 
 hashToFilePath :: Hash         -- ^The hash of a file.
                -> App FilePath -- ^The absolute path to the file with the given hash. May not exist.
