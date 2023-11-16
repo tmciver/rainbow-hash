@@ -4,7 +4,6 @@
 module Main where
 
 import Protolude hiding (get, put)
-import Prelude (String)
 
 import Web.Scotty hiding (put)
 import Network.HTTP.Types (status404)
@@ -40,10 +39,10 @@ main = do
 createLocalStorageDir :: IO ()
 createLocalStorageDir = D.getXdgDirectory D.XdgData "rainbowhash" >>= D.createDirectoryIfMissing True
 
-template :: String -> H.Html -> H.Html
+template :: Text -> H.Html -> H.Html
 template title' body' = H.docTypeHtml $ do
   H.head $ do
-    H.title $ fromString $ "Rainbow Hash - " ++ title'
+    H.title $ H.text $ "Rainbow Hash - " <> title'
   H.body $ homeLink >> H.br >> body'
 
 homeView :: ActionM ()
@@ -55,10 +54,10 @@ homeHtml = template "Home" $ do
   fileUploadForm
 
 homeLink :: H.Html
-homeLink = ((H.a . H.toHtml) ("Home" :: String)) H.! href "/"
+homeLink = ((H.a . H.toHtml) ("Home" :: Text)) H.! href "/"
 
 contentListLink :: H.Html
-contentListLink = ((H.a . H.toHtml) ("See a list of all blobs." :: String)) H.! href "/blobs"
+contentListLink = ((H.a . H.toHtml) ("See a list of all blobs." :: Text)) H.! href "/blobs"
 
 fileUploadForm :: H.Html
 fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! action "/blobs" $ do
@@ -79,10 +78,10 @@ handleUpload = do
       addHeader "Location" (hashToUrl hash)
       homeView
 
-getBlob :: String -> ActionM ()
-getBlob h = do
+getBlob :: Text -> ActionM ()
+getBlob hash = do
   env <- rhEnv
-  dataMaybe <- liftIO $ runWithEnv (RH.get h) env
+  dataMaybe <- liftIO $ runWithEnv (RH.get hash) env
   let strictDataMaybe = LB.fromStrict <$> dataMaybe
   maybe notFound' raw strictDataMaybe
     where notFound' :: ActionM ()
@@ -94,13 +93,13 @@ showAllHashes = do
   allHashes <- liftIO $ runWithEnv allHashes env
   html $ renderHtml $ hashesHtmlView allHashes
 
-hashesHtmlView :: [String] -> H.Html
+hashesHtmlView :: [Hash] -> H.Html
 hashesHtmlView hashes = template "Content" $ do
   H.p "A list of all blobs:"
   H.ul $ forM_ hashes (H.li . hashToAnchor)
 
 hashToUrl :: Hash -> TL.Text
-hashToUrl = TL.pack . ("/blob/" ++)
+hashToUrl = TL.fromStrict . ("/blob/" <>)
 
 hashToAnchor :: Hash -> H.Html
 hashToAnchor h = ((H.a . H.toHtml) h) H.! href (H.textValue $ toStrict $ hashToUrl h)

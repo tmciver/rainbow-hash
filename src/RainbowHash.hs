@@ -15,7 +15,6 @@ module RainbowHash
   ) where
 
 import Protolude hiding (get, put)
-import Prelude (String)
 
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
@@ -27,13 +26,14 @@ import Magic
 import Data.Bool (not)
 import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
-import Data.Text (pack, unpack, strip, stripPrefix)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Maybe (fromMaybe)
 
 import RainbowHash.App (App(..), runWithEnv)
 import RainbowHash.Env (Env(..))
 
-type Hash = String
+type Hash = Text
 
 newtype FileId = FileId { getHash :: Hash }
 
@@ -69,7 +69,7 @@ putFileByteString bs = do
 getStorageDir :: App FilePath
 getStorageDir = App $ reader storageDir
 
--- | Return the 'String' of the SHA256 hash of the given 'ByteString'.
+-- | Return the 'Hash' of the given 'ByteString'.
 calcHash :: B.ByteString -> Hash
 calcHash bs = show $ (C.hash bs :: C.SHA256)
 
@@ -106,24 +106,23 @@ put bs = do
   writeMetaDataToFile filePath
   return h
 
-type MediaType = String
-type Charset = String
+type MediaType = Text
+type Charset = Text
 type MediaInfo = (Maybe MediaType, Maybe Charset)
 
-parseMediaInfo :: String -> MediaInfo
-parseMediaInfo s = case splitOn ";" s of
+parseMediaInfo :: Text -> MediaInfo
+parseMediaInfo t = case T.splitOn ";" t of
   [m] -> (parse m, Nothing)
   m:c:[] -> (parse m, parseCharset c)
   _ -> (Nothing, Nothing)
-  where parse :: String -> Maybe String
-        parse [] = Nothing
-        parse s = Just s
-        stripCharset :: String -> Maybe Charset
-        stripCharset s = do
-          let ss = strip (pack s)
-          cs <- stripPrefix "charset=" ss
-          return $ unpack cs
-        parseCharset :: String -> Maybe Charset
+  where parse :: Text -> Maybe Text
+        parse t =
+          if T.null t
+          then Nothing
+          else Just t
+        stripCharset :: Text -> Maybe Charset
+        stripCharset = T.stripPrefix "charset=" . T.strip
+        parseCharset :: Text -> Maybe Charset
         parseCharset s = (parse s) >>= stripCharset
 
 getMediaInfo :: FilePath      -- |The file for which to get 'MediaInfo'.
@@ -132,7 +131,7 @@ getMediaInfo file = liftIO $ do
   magic <- magicOpen [MagicMime]
   magicLoadDefault magic
   mime <- magicFile magic file
-  return $ parseMediaInfo mime
+  return $ parseMediaInfo (T.pack mime)
 
 -- | Write the data given by the 'ByteString' to a file under the directory
 -- given by 'FilePath' returning the hash of the contents.
@@ -140,13 +139,13 @@ writeDataToFile :: B.ByteString         -- ^Data to write.
                 -> App (Hash, FilePath)
 writeDataToFile bs = do
   storageDir <- getStorageDir
-  let i = calcHash bs
-      (d,f) = splitAt 2 i
+  let hash = calcHash bs
+      (d,f) = splitAt 2 (T.unpack hash)
       dirPath = storageDir </> d
       filePath = dirPath </> f
   liftIO $ D.createDirectoryIfMissing True dirPath
   liftIO $ B.writeFile filePath bs
-  pure (i, filePath)
+  pure (hash, filePath)
 
 writeMetaDataToFile :: FilePath -- |The file for which to get 'MediaInfo'.
                     -> App ()
@@ -154,16 +153,16 @@ writeMetaDataToFile fp = do
   (maybeMT, maybeCS) <- getMediaInfo fp
   let mediaType = fromMaybe "unknown" maybeMT
       charset = fromMaybe "unknown" maybeCS
-      str = "content-type: " ++ mediaType ++ "\n" ++ "charset: " ++ charset ++ "\n"
+      str = "content-type: " <> mediaType <> "\n" <> "charset: " <> charset <> "\n"
       metaFile = fp ++ "_metadata.txt"
-  liftIO $ appendFile metaFile (pack str)
+  liftIO $ T.appendFile metaFile str
 
 hashToFilePath :: Hash         -- ^The hash of a file.
                -> App FilePath -- ^The absolute path to the file with the given hash. May not exist.
 hashToFilePath h = do
   storeDir <- getStorageDir
-  let (d,f) = splitAt 2 h
-      filePath = storeDir </> d </> f
+  let (d,f) = T.splitAt 2 h
+      filePath = storeDir </> T.unpack d </> T.unpack f
   pure filePath
 
 -- | Returns 'True' if the given hash exists, 'False' otherwise.
@@ -177,8 +176,8 @@ allHashes = do
   firstTwo <- liftIO $ D.listDirectory storageDir
   allHashes' <- liftIO $ sequence $ fmap (hashesForHashDir storageDir) firstTwo
   pure $ join allHashes'
-  where hashesForHashDir :: FilePath -> String -> IO [Hash]
+  where hashesForHashDir :: FilePath -> FilePath -> IO [Hash]
         hashesForHashDir storageDir firstTwo = do
           allFiles <- D.listDirectory $ storageDir </> firstTwo
           let subHashes = filter (not . (isSuffixOf "metadata.txt")) allFiles
-          pure $ fmap (firstTwo ++) subHashes
+          pure $ fmap (T.pack . (firstTwo <>)) subHashes
