@@ -27,8 +27,8 @@ import Data.Bool (not)
 import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
 import Data.Maybe (fromMaybe)
+import Control.Monad.Logger (MonadLogger(..), logInfoN, logWarnN)
 
---import RainbowHash.App (App(..), runWithEnv)
 import RainbowHash.Env (Env(..))
 
 type Hash = Text
@@ -63,26 +63,33 @@ putFileByteString
      , FilePut m ByteString
      , MediaInfoGet m
      , MediaInfoPut m
+     , MonadLogger m
      )
   => ByteString
   -> m FileId
 putFileByteString bs = do
+  logInfoN "Adding content to store."
+
   -- Get the file's hash
   let hash = calcHash bs
       fileId = FileId hash
+
+  logInfoN $ "This content has hash identifier " <> hash
 
   -- See if the file exists already.
   exists <- fileExists fileId
 
   -- Put the file in the store if it doesn't already exist.
-  unless exists $
-    do
+  if exists
+    then logInfoN "This content already exists in the store; not adding."
+    else do
+      logInfoN "This content does not exist in the store; adding."
       putFile fileId bs
 
       maybeMetadata <- getMediaInfo fileId
       case maybeMetadata of
         Just metadata -> putMediaInfo fileId metadata
-        Nothing -> pure () -- TODO: log about no metadata
+        Nothing -> logWarnN $ "Could not get media info for file with ID " <> hash
 
   pure fileId
 

@@ -5,7 +5,7 @@
 
 module RainbowHash.App
   ( App(..)
-  , runWithEnv
+  , runAppIO
   ) where
 
 import Protolude
@@ -17,7 +17,9 @@ import Control.Monad.Reader (ReaderT)
 import Control.Monad.IO.Class (MonadIO)
 import Magic
 import Control.Monad (join)
+import Control.Monad.Logger (MonadLogger(..), toLogStr, fromLogStr)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import System.FilePath (FilePath, (</>))
 
@@ -27,11 +29,11 @@ import RainbowHash (FileGet(..), FilePut(..), MediaInfoGet(..), MediaInfoPut(..)
 newtype App a = App { runApp :: ReaderT Env IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env)
 
-runWithEnv :: App a -> Env -> IO a
-runWithEnv = runReaderT . runApp
+runAppIO :: App a -> Env -> IO a
+runAppIO = runReaderT . runApp
 
 fileIdToFilePath
-  :: FileId         -- ^The hash of a file.
+  :: FileId       -- ^The ID of a file.
   -> App FilePath -- ^The absolute path to the file with the given hash. May not exist.
 fileIdToFilePath (FileId hash) = do
   storeDir <- asks storageDir
@@ -104,3 +106,7 @@ instance MediaInfoPut App where
             metaFile = fp ++ "_metadata.txt"
         liftIO $ T.appendFile metaFile str
       Nothing -> pure () -- TODO: log
+
+instance MonadLogger App where
+  monadLoggerLog _ _ level msg =
+    liftIO $ T.putStrLn $ (show level) <> " " <> (T.decodeUtf8 . fromLogStr . toLogStr) msg

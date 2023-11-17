@@ -16,7 +16,7 @@ import qualified Data.ByteString as BS
 
 import RainbowHash
 import RainbowHash.Env (Env(..))
-import RainbowHash.App (runWithEnv)
+import RainbowHash.App (runAppIO)
 
 rainbowHashDir :: IO FilePath
 rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
@@ -63,7 +63,7 @@ putFile' :: FilePath -- ^Path to storage directory.
 putFile' storeDir fp = do
   let env = Env storeDir
   bs <- BS.readFile fp
-  FileId hash <- runWithEnv (putFileByteString bs) env
+  FileId hash <- runAppIO (putFileByteString bs) env
   T.putStrLn ("Stored file whose content hash is: " <> hash)
 
 putFilesFromDirectory :: FilePath -- ^Path to storage directory.

@@ -21,7 +21,7 @@ import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
 import RainbowHash (FileId(..), Hash, FileGet(..), putFileByteString)
-import RainbowHash.App (runWithEnv)
+import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 
 rhEnv :: ActionM Env
@@ -73,7 +73,7 @@ handleUpload = do
     Just (_, fi) -> do
       let fcontent = LB.toStrict $ fileContent fi
       env <- rhEnv
-      fileId <- liftIO $ runWithEnv (putFileByteString fcontent) env
+      fileId <- liftIO $ runAppIO (putFileByteString fcontent) env
       status status201
       addHeader "Location" (fileIdToUrl fileId)
       homeView
@@ -82,7 +82,7 @@ getBlob :: Text -> ActionM ()
 getBlob hash = do
   let fileId = FileId hash
   env <- rhEnv
-  dataMaybe <- liftIO $ runWithEnv (RH.getFile fileId) env
+  dataMaybe <- liftIO $ runAppIO (RH.getFile fileId) env
   let strictDataMaybe = LB.fromStrict <$> dataMaybe
   maybe notFound' raw strictDataMaybe
     where notFound' :: ActionM ()
@@ -91,7 +91,7 @@ getBlob hash = do
 showAllHashes :: ActionM ()
 showAllHashes = do
   env <- rhEnv
-  allHashes <- liftIO $ runWithEnv allFileIds env
+  allHashes <- liftIO $ runAppIO allFileIds env
   html $ renderHtml $ hashesHtmlView allHashes
 
 hashesHtmlView :: Set FileId -> H.Html
