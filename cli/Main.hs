@@ -12,6 +12,7 @@ import System.FilePath
 import System.Directory (doesDirectoryExist, getCurrentDirectory, listDirectory)
 import Control.Monad (join)
 import qualified System.Directory as D
+import qualified Data.ByteString as BS
 
 import RainbowHash
 import RainbowHash.Env (Env(..))
@@ -61,8 +62,9 @@ putFile' :: FilePath -- ^Path to storage directory.
          -> IO ()
 putFile' storeDir fp = do
   let env = Env storeDir
-  h <- runWithEnv (putFile fp) env
-  T.putStrLn ("Stored file whose content hash is: " <> h)
+  bs <- BS.readFile fp
+  FileId hash <- runWithEnv (putFileByteString bs) env
+  T.putStrLn ("Stored file whose content hash is: " <> hash)
 
 putFilesFromDirectory :: FilePath -- ^Path to storage directory.
                       -> FilePath -- ^Path to source directory.

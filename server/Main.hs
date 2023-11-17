@@ -20,7 +20,7 @@ import qualified System.Directory as D
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
-import RainbowHash (Hash, allHashes, put)
+import RainbowHash (FileId(..), Hash, FileGet(..), putFileByteString)
 import RainbowHash.App (runWithEnv)
 import RainbowHash.Env (Env(..))
 
@@ -73,15 +73,16 @@ handleUpload = do
     Just (_, fi) -> do
       let fcontent = LB.toStrict $ fileContent fi
       env <- rhEnv
-      hash <- liftIO $ runWithEnv (put fcontent) env
+      fileId <- liftIO $ runWithEnv (putFileByteString fcontent) env
       status status201
-      addHeader "Location" (hashToUrl hash)
+      addHeader "Location" (fileIdToUrl fileId)
       homeView
 
 getBlob :: Text -> ActionM ()
 getBlob hash = do
+  let fileId = FileId hash
   env <- rhEnv
-  dataMaybe <- liftIO $ runWithEnv (RH.get hash) env
+  dataMaybe <- liftIO $ runWithEnv (RH.getFile fileId) env
   let strictDataMaybe = LB.fromStrict <$> dataMaybe
   maybe notFound' raw strictDataMaybe
     where notFound' :: ActionM ()
@@ -90,16 +91,16 @@ getBlob hash = do
 showAllHashes :: ActionM ()
 showAllHashes = do
   env <- rhEnv
-  allHashes <- liftIO $ runWithEnv allHashes env
+  allHashes <- liftIO $ runWithEnv allFileIds env
   html $ renderHtml $ hashesHtmlView allHashes
 
-hashesHtmlView :: [Hash] -> H.Html
-hashesHtmlView hashes = template "Content" $ do
+hashesHtmlView :: Set FileId -> H.Html
+hashesHtmlView fileIds = template "Content" $ do
   H.p "A list of all blobs:"
-  H.ul $ forM_ hashes (H.li . hashToAnchor)
+  H.ul $ forM_ fileIds (H.li . fileIdToAnchor)
 
-hashToUrl :: Hash -> TL.Text
-hashToUrl = TL.fromStrict . ("/blob/" <>)
+fileIdToUrl :: FileId -> TL.Text
+fileIdToUrl = TL.fromStrict . ("/blob/" <>) . getHash
 
-hashToAnchor :: Hash -> H.Html
-hashToAnchor h = ((H.a . H.toHtml) h) H.! href (H.textValue $ toStrict $ hashToUrl h)
+fileIdToAnchor :: FileId -> H.Html
+fileIdToAnchor fileId = ((H.a . H.toHtml) (getHash fileId)) H.! href (H.textValue $ toStrict $ fileIdToUrl fileId)

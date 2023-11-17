@@ -28,6 +28,7 @@ library:
   dependencies:
   - protolude
   - bytestring
+  - containers
   - directory
   - filepath
   - hashing
