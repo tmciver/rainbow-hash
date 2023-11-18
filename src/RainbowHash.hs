@@ -7,6 +7,7 @@
 module RainbowHash
   ( putFileByteString
   , Hash
+  , File(..)
   , FileId(..)
   , FileGet(..)
   , FilePut(..)
@@ -38,12 +39,17 @@ newtype FileId = FileId { getHash :: Hash }
 type MediaType = Text
 type Charset = Text
 data MediaInfo = MediaInfo
-  { mediaType :: Maybe MediaType
+  { mediaType :: MediaType
   , mediaCharset :: Maybe Charset
+  }
+data File = File
+  { fileId :: FileId
+  , fileMediaInfo :: MediaInfo
+  , fileData :: ByteString
   }
 
 class Monad m => FileGet m where
-  getFile :: FileId -> m (Maybe ByteString)
+  getFile :: FileId -> m (Maybe File)
   fileExists :: FileId -> m Bool
   allFileIds :: m (Set FileId)
 

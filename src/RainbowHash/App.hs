@@ -24,7 +24,7 @@ import qualified Data.Text.IO as T
 import System.FilePath (FilePath, (</>))
 
 import RainbowHash.Env (Env(..))
-import RainbowHash (FileGet(..), FilePut(..), MediaInfoGet(..), MediaInfoPut(..), FileId(..), MediaInfo(..), Charset, MediaType)
+import RainbowHash (FileGet(..), FilePut(..), MediaInfoGet(..), MediaInfoPut(..), FileId(..), MediaInfo(..), Charset, MediaType, File(..))
 
 newtype App a = App { runApp :: ReaderT Env IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env)
@@ -41,11 +41,14 @@ fileIdToFilePath (FileId hash) = do
       filePath = storeDir </> T.unpack d </> T.unpack f
   pure filePath
 
+defaultMediaType :: MediaType
+defaultMediaType = "application/octet-stream"
+
 parseMediaInfo :: Text -> MediaInfo
 parseMediaInfo t = case T.splitOn ";" t of
-  [m] -> MediaInfo (parse m) Nothing
-  m:c:[] -> MediaInfo (parse m) (parseCharset c)
-  _ -> MediaInfo Nothing Nothing
+  [m] -> MediaInfo (fromMaybe defaultMediaType (parse m)) Nothing
+  m:c:[] -> MediaInfo (fromMaybe defaultMediaType (parse m)) (parseCharset c)
+  _ -> MediaInfo defaultMediaType Nothing
   where parse :: Text -> Maybe Text
         parse t =
           if T.null t
@@ -60,7 +63,12 @@ instance FileGet App where
   getFile fileId = do
     fp <- fileIdToFilePath fileId
     exists' <- liftIO $ D.doesFileExist fp
-    if exists' then Just <$> liftIO (BS.readFile fp)
+    if exists'
+      then do
+        bs <- liftIO (BS.readFile fp)
+        maybeMediaInfo <- getMediaInfo fileId
+        let mediaInfo = fromMaybe (MediaInfo defaultMediaType Nothing) maybeMediaInfo
+        pure . Just $ File fileId mediaInfo bs
       else pure Nothing
 
   fileExists fileId =
@@ -99,10 +107,8 @@ instance MediaInfoPut App where
     fp <- fileIdToFilePath fileId
     maybeMediaInfo <- getMediaInfo fileId
     case maybeMediaInfo of
-      Just (MediaInfo maybeMT maybeCS) -> do
-        let mediaType = fromMaybe "unknown" maybeMT
-            charset = fromMaybe "unknown" maybeCS
-            str = "content-type: " <> mediaType <> "\n" <> "charset: " <> charset <> "\n"
+      Just (MediaInfo mediaType maybeCS) -> do
+        let str = "content-type: " <> mediaType <> maybe "" (\charset -> "\n" <> "charset: " <> charset <> "\n") maybeCS
             metaFile = fp ++ "_metadata.txt"
         liftIO $ T.appendFile metaFile str
       Nothing -> pure () -- TODO: log
