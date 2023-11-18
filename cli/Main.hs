@@ -1,11 +1,22 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+
 module Main where
 
-import RainbowHash
-import System.IO
+import Protolude
+
+import qualified Data.Text.IO as T
+import qualified Data.Text as T
+import System.IO (hFlush)
 import System.FilePath
 import System.Directory (doesDirectoryExist, getCurrentDirectory, listDirectory)
 import Control.Monad (join)
 import qualified System.Directory as D
+import qualified Data.ByteString as BS
+
+import RainbowHash
+import RainbowHash.Env (Env(..))
+import RainbowHash.App (runAppIO)
 
 rainbowHashDir :: IO FilePath
 rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
@@ -16,11 +27,11 @@ getStoreDir = do
   defaultStoreDir <- rainbowHashDir
   putStr ("Enter a storage directory [" ++ defaultStoreDir ++ "]: ")
   hFlush stdout
-  d <- getLine
+  d <- T.unpack <$> getLine
   let tmpDir = if null d then defaultStoreDir else d
   dirExists <- doesDirectoryExist tmpDir
   let dir = if dirExists then tmpDir
-            else error ("Error: " ++ tmpDir ++ " does not exist.")
+            else panic ("Error: " <> T.pack tmpDir <> " does not exist.")
   return dir
 
 -- |Asks the user for the directory from which files will be imported.
@@ -29,11 +40,11 @@ getSourceDir = do
   currentDir <- getCurrentDirectory
   putStr ("Enter a source directory [" ++ currentDir ++ "]: ")
   hFlush stdout
-  d <- getLine
+  d <- T.unpack <$> getLine
   let tmpDir = if null d then currentDir else d
   dirExists <- doesDirectoryExist tmpDir
   let dir = if dirExists then tmpDir
-            else error ("Error: " ++ tmpDir ++ " does not exist.")
+            else panic ("Error: " <> T.pack tmpDir <> " does not exist.")
   return dir
 
 listFilesRecursively :: FilePath -> IO [FilePath]
@@ -51,8 +62,9 @@ putFile' :: FilePath -- ^Path to storage directory.
          -> IO ()
 putFile' storeDir fp = do
   let env = Env storeDir
-  h <- runWithEnv (putFile fp) env
-  putStrLn ("Stored file whose content hash is: " ++ h)
+  bs <- BS.readFile fp
+  FileId hash <- runAppIO (putFileByteString bs) env
+  T.putStrLn ("Stored file whose content hash is: " <> hash)
 
 putFilesFromDirectory :: FilePath -- ^Path to storage directory.
                       -> FilePath -- ^Path to source directory.
@@ -67,4 +79,4 @@ main = do
   storeDir <- getStoreDir
   sourceDir <- getSourceDir
   putFilesFromDirectory storeDir sourceDir
-  putStrLn "Done."
+  putStrLn ("Done." :: Text)

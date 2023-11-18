@@ -1,153 +1,98 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module RainbowHash ( getFile
-                   , get
-                   , putFile
-                   , put
-                   , exists
-                   , allHashes
-                   , runWithEnv
-                   , Env(..)
-                   , Hash
-                   ) where
+module RainbowHash
+  ( putFileByteString
+  , Hash
+  , FileId(..)
+  , FileGet(..)
+  , FilePut(..)
+  , MediaInfoGet(..)
+  , MediaInfoPut(..)
+  , MediaInfo(..)
+  , Charset
+  , MediaType
+  ) where
+
+import Protolude hiding (get, put)
 
 import qualified Data.ByteString as B
-import System.FilePath
+import Data.ByteString (ByteString)
 import qualified System.Directory as D
 import qualified Crypto.Hash as C
-import Control.Monad (join)
-import Magic
 import Data.Bool (not)
 import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
-import Data.Text (pack, unpack, strip, stripPrefix)
 import Data.Maybe (fromMaybe)
-import Control.Monad.Trans.Reader
-import Control.Monad.IO.Class
+import Control.Monad.Logger (MonadLogger(..), logInfoN, logWarnN)
 
-type Hash = String
-data Env = Env { storageDir :: FilePath }
-newtype App a = App { runApp :: ReaderT Env IO a }
-              deriving (Functor, Applicative, Monad, MonadIO)
+import RainbowHash.Env (Env(..))
 
-runWithEnv :: App a -> Env -> IO a
-runWithEnv app = (runReaderT $ runApp app)
+type Hash = Text
 
--- |Return the configured storage directory in the 'App' Monad.
-getStorageDir :: App FilePath
-getStorageDir = App $ reader storageDir
+newtype FileId = FileId { getHash :: Hash }
+  deriving (Eq, Ord, Show)
+type MediaType = Text
+type Charset = Text
+data MediaInfo = MediaInfo
+  { mediaType :: Maybe MediaType
+  , mediaCharset :: Maybe Charset
+  }
 
--- | Return the 'String' of the SHA256 hash of the given 'ByteString'.
-hash :: B.ByteString -> Hash
-hash bs = show $ (C.hash bs :: C.SHA256)
+class Monad m => FileGet m where
+  getFile :: FileId -> m (Maybe ByteString)
+  fileExists :: FileId -> m Bool
+  allFileIds :: m (Set FileId)
 
--- |Returns the 'FilePath' of the file with the given hash, if it exists.
-getFile :: Hash                 -- ^The hash of the file to retrieve.
-        -> App (Maybe FilePath) -- ^The 'FilePath' of the file with the given hash, if it exists.
-getFile h = do
-  fp <- hashToFilePath h
-  exists' <- liftIO $ D.doesFileExist fp
-  if exists' then return $ Just fp
-    else return Nothing
+-- This is a low-level class used for implementation.  If you want to put a file
+-- in the store, use putFileByteString.
+class Monad m => FilePut m v where
+  putFile :: FileId -> v -> m ()
 
--- | Retrieve the data (as 'ByteString'), if any, associated with the given
--- hash.
-get :: Hash                     -- ^The hash of the file to retrieve.
-    -> App (Maybe B.ByteString) -- ^The raw data of the file with the given hash, if it exists.
-get h = do
-  maybeFp <- getFile h
-  case maybeFp of
-    Just fp ->  liftIO $ Just <$> (B.readFile fp)
-    Nothing -> return Nothing
+class MediaInfoGet m where
+  getMediaInfo :: FileId -> m (Maybe MediaInfo)
 
--- |Adds the file at the given 'FilePath' and returns the hash.
-putFile :: FilePath -- ^Path to the file to be stored.
-        -> App Hash -- ^Returns the hash of the stored data.
-putFile fp = (liftIO $ B.readFile fp) >>= put
+class MediaInfoPut m where
+  putMediaInfo :: FileId -> MediaInfo -> m ()
 
--- | Stores the given 'ByteString' in storage and returns the SHA256 hash of its
--- contents.
-put :: B.ByteString -- ^The raw data to store.
-    -> App Hash      -- ^Returns the hash of the stored data.
-put bs = do
-  (h, filePath) <- writeDataToFile bs
-  writeMetaDataToFile filePath
-  return h
+putFileByteString
+  :: ( FileGet m
+     , FilePut m ByteString
+     , MediaInfoGet m
+     , MediaInfoPut m
+     , MonadLogger m
+     )
+  => ByteString
+  -> m FileId
+putFileByteString bs = do
+  logInfoN "Adding content to store."
 
-type MediaType = String
-type Charset = String
-type MediaInfo = (Maybe MediaType, Maybe Charset)
+  -- Get the file's hash
+  let hash = calcHash bs
+      fileId = FileId hash
 
-parseMediaInfo :: String -> MediaInfo
-parseMediaInfo s = case splitOn ";" s of
-  [m] -> (parse m, Nothing)
-  m:c:[] -> (parse m, parseCharset c)
-  _ -> (Nothing, Nothing)
-  where parse :: String -> Maybe String
-        parse [] = Nothing
-        parse s = Just s
-        stripCharset :: String -> Maybe Charset
-        stripCharset s = do
-          let ss = strip (pack s)
-          cs <- stripPrefix "charset=" ss
-          return $ unpack cs
-        parseCharset :: String -> Maybe Charset
-        parseCharset s = (parse s) >>= stripCharset
+  logInfoN $ "This content has hash identifier " <> hash
 
-getMediaInfo :: FilePath      -- |The file for which to get 'MediaInfo'.
-             -> App MediaInfo
-getMediaInfo file = liftIO $ do
-  magic <- magicOpen [MagicMime]
-  magicLoadDefault magic
-  mime <- magicFile magic file
-  return $ parseMediaInfo mime
+  -- See if the file exists already.
+  exists <- fileExists fileId
 
--- | Write the data given by the 'ByteString' to a file under the directory
--- given by 'FilePath' returning the hash of the contents.
-writeDataToFile :: B.ByteString         -- ^Data to write.
-                -> App (Hash, FilePath)
-writeDataToFile bs = do
-  storageDir <- getStorageDir
-  let i = hash bs
-      (d,f) = splitAt 2 i
-      dirPath = storageDir </> d
-      filePath = dirPath </> f
-  liftIO $ D.createDirectoryIfMissing True dirPath
-  liftIO $ B.writeFile filePath bs
-  pure (i, filePath)
+  -- Put the file in the store if it doesn't already exist.
+  if exists
+    then logInfoN "This content already exists in the store; not adding."
+    else do
+      logInfoN "This content does not exist in the store; adding."
+      putFile fileId bs
 
-writeMetaDataToFile :: FilePath -- |The file for which to get 'MediaInfo'.
-                    -> App ()
-writeMetaDataToFile fp = do
-  (maybeMT, maybeCS) <- getMediaInfo fp
-  let mediaType = fromMaybe "unknown" maybeMT
-      charset = fromMaybe "unknown" maybeCS
-      str = "content-type: " ++ mediaType ++ "\n" ++ "charset: " ++ charset ++ "\n"
-      metaFile = fp ++ "_metadata.txt"
-  liftIO $ appendFile metaFile str
+      maybeMetadata <- getMediaInfo fileId
+      case maybeMetadata of
+        Just metadata -> putMediaInfo fileId metadata
+        Nothing -> logWarnN $ "Could not get media info for file with ID " <> hash
 
-hashToFilePath :: Hash         -- ^The hash of a file.
-               -> App FilePath -- ^The absolute path to the file with the given hash. May not exist.
-hashToFilePath h = do
-  storeDir <- getStorageDir
-  let (d,f) = splitAt 2 h
-      filePath = storeDir </> d </> f
-  pure filePath
+  pure fileId
 
--- | Returns 'True' if the given hash exists, 'False' otherwise.
-exists :: Hash      -- ^The hash of a file.
-       -> App Bool  -- ^True, if a file with the given hash exists, False otherwise.
-exists h = hashToFilePath h >>= liftIO . D.doesFileExist
-
-allHashes :: App [Hash] -- ^A list of all the stored hashes.
-allHashes = do
-  storageDir <- getStorageDir
-  firstTwo <- liftIO $ D.listDirectory storageDir
-  allHashes' <- liftIO $ sequence $ fmap (hashesForHashDir storageDir) firstTwo
-  pure $ join allHashes'
-  where hashesForHashDir :: FilePath -> String -> IO [Hash]
-        hashesForHashDir storageDir firstTwo = do
-          allFiles <- D.listDirectory $ storageDir </> firstTwo
-          let subHashes = filter (not . (isSuffixOf "metadata.txt")) allFiles
-          pure $ fmap (firstTwo ++) subHashes
+-- | Return the 'Hash' of the given 'ByteString'.
+calcHash :: B.ByteString -> Hash
+calcHash bs = show $ (C.hash bs :: C.SHA256)

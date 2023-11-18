@@ -26,10 +26,14 @@ dependencies:
 library:
   source-dirs: src
   dependencies:
+  - protolude
   - bytestring
+  - containers
   - directory
   - filepath
   - hashing
+  - monad-logger
+  - mtl
   - split
   - text
   - transformers
@@ -44,6 +48,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - rainbow-hash
+    - protolude
     - directory
     - http-types
     - scotty
@@ -62,9 +67,11 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - rainbow-hash
+    - protolude
     - directory
     - filepath
     - bytestring
+    - text
 
 tests:
   rainbow-hash-test:
