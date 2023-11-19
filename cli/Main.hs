@@ -62,8 +62,7 @@ putFile' :: FilePath -- ^Path to storage directory.
          -> IO ()
 putFile' storeDir fp = do
   let env = Env storeDir
-  bs <- BS.readFile fp
-  FileId hash <- runAppIO (putFileByteString bs) env
+  FileId hash <- runAppIO (putFileFromFilePath fp) env
   T.putStrLn ("Stored file whose content hash is: " <> hash)
 
 putFilesFromDirectory :: FilePath -- ^Path to storage directory.

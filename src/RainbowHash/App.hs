@@ -2,6 +2,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module RainbowHash.App
   ( App(..)
@@ -21,13 +23,18 @@ import Control.Monad.Logger (MonadLogger(..), toLogStr, fromLogStr)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
-import System.FilePath (FilePath, (</>))
+import System.FilePath (FilePath, (</>), takeDirectory)
+import System.IO (hFlush)
+import System.IO.Temp (withSystemTempFile)
+import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
+
+import Control.Monad.Logger (logInfoN)
 
 import RainbowHash.Env (Env(..))
-import RainbowHash (FileGet(..), FilePut(..), MediaInfoGet(..), MediaInfoPut(..), FileId(..), MediaInfo(..), Charset, MediaType, File(..))
+import RainbowHash (FileGet(..), FilePut(..), MediaInfoDiscover(..), FileId(..), MediaInfo(..), Charset, MediaType, File(..), FileSystemRead(..))
 
 newtype App a = App { runApp :: ReaderT Env IO a }
-  deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env)
+  deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env, MonadMask, MonadCatch, MonadThrow)
 
 runAppIO :: App a -> Env -> IO a
 runAppIO = runReaderT . runApp
@@ -44,8 +51,18 @@ fileIdToFilePath (FileId hash) = do
 defaultMediaType :: MediaType
 defaultMediaType = "application/octet-stream"
 
+mediaInfoFileSuffix :: Text
+mediaInfoFileSuffix = "_metadata.txt"
+
+getMediaInfoForFile
+  :: FileId
+  -> App (Maybe MediaInfo)
+getMediaInfoForFile fileId = do
+  mediaInfoFilePath <- fileIdToFilePath fileId <&> (<> T.unpack mediaInfoFileSuffix)
+  liftIO $ Just . parseMediaInfo <$> T.readFile mediaInfoFilePath
+
 parseMediaInfo :: Text -> MediaInfo
-parseMediaInfo t = case T.splitOn ";" t of
+parseMediaInfo t = case lines t of
   [m] -> MediaInfo (fromMaybe defaultMediaType (parse m)) Nothing
   m:c:[] -> MediaInfo (fromMaybe defaultMediaType (parse m)) (parseCharset c)
   _ -> MediaInfo defaultMediaType Nothing
@@ -66,7 +83,7 @@ instance FileGet App where
     if exists'
       then do
         bs <- liftIO (BS.readFile fp)
-        maybeMediaInfo <- getMediaInfo fileId
+        maybeMediaInfo <- getMediaInfoForFile fileId
         let mediaInfo = fromMaybe (MediaInfo defaultMediaType Nothing) maybeMediaInfo
         pure . Just $ File fileId mediaInfo bs
       else pure Nothing
@@ -86,32 +103,34 @@ instance FileGet App where
               pure $ fmap (FileId . T.pack . (firstTwo <>)) subHashes
 
 instance FilePut App ByteString where
-  putFile (FileId hash) bs = do
-    storageDir <- asks storageDir
-    let (d,f) = splitAt 2 (T.unpack hash)
-        dirPath = storageDir </> d
-        filePath = dirPath </> f
-    liftIO $ D.createDirectoryIfMissing True dirPath
-    liftIO $ BS.writeFile filePath bs
+  putFile fileId (MediaInfo mediaType maybeCharset) bs = do
+    dataFilePath <- fileIdToFilePath fileId
+    let metadataFilePath = dataFilePath <> T.unpack mediaInfoFileSuffix
+        dir = takeDirectory dataFilePath
+        mediaInfoText = "content-type: " <> mediaType <> maybe "" (\charset -> "\n" <> "charset: " <> charset <> "\n") maybeCharset
+    liftIO $ D.createDirectoryIfMissing True dir
+    liftIO $ BS.writeFile dataFilePath bs
+    liftIO $ T.writeFile metadataFilePath mediaInfoText
 
-instance MediaInfoGet App where
-  getMediaInfo fileId = do
-    fp <- fileIdToFilePath fileId
+instance MediaInfoDiscover App FilePath where
+  getMediaInfo fp = do
     magic <- liftIO $ magicOpen [MagicMime]
     liftIO $ magicLoadDefault magic
     mime <- liftIO $ magicFile magic fp
-    pure . Just $ parseMediaInfo (T.pack mime)
+    pure $ parseMediaInfo (T.pack mime)
 
-instance MediaInfoPut App where
-  putMediaInfo fileId md = do
-    fp <- fileIdToFilePath fileId
-    maybeMediaInfo <- getMediaInfo fileId
-    case maybeMediaInfo of
-      Just (MediaInfo mediaType maybeCS) -> do
-        let str = "content-type: " <> mediaType <> maybe "" (\charset -> "\n" <> "charset: " <> charset <> "\n") maybeCS
-            metaFile = fp ++ "_metadata.txt"
-        liftIO $ T.appendFile metaFile str
-      Nothing -> pure () -- TODO: log
+instance MediaInfoDiscover App ByteString where
+  getMediaInfo bs = withSystemTempFile "rainbowhash-" $ \fp h -> do
+    liftIO $ BS.hPut h bs
+    liftIO $ hFlush h
+    magic <- liftIO $ magicOpen [MagicMime]
+    liftIO $ magicLoadDefault magic
+    mime <- liftIO $ magicFile magic fp
+    logInfoN $ T.pack mime
+    pure $ parseMediaInfo (T.pack mime)
+
+instance FileSystemRead App where
+  readFile = liftIO . BS.readFile
 
 instance MonadLogger App where
   monadLoggerLog _ _ level msg =

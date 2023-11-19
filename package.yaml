@@ -30,11 +30,13 @@ library:
   - bytestring
   - containers
   - directory
+  - exceptions
   - filepath
   - hashing
   - monad-logger
   - mtl
   - split
+  - temporary
   - text
   - transformers
 
