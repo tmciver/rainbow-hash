@@ -12,11 +12,9 @@ module RainbowHash
   , FileId(..)
   , FileGet(..)
   , FilePut(..)
-  , MediaInfoDiscover(..)
-  , MediaInfo(..)
-  , FileSystemRead(..)
-  , Charset
+  , MediaTypeDiscover(..)
   , MediaType
+  , FileSystemRead(..)
   ) where
 
 import Protolude hiding (readFile)
@@ -38,14 +36,9 @@ type Hash = Text
 newtype FileId = FileId { getHash :: Hash }
   deriving (Eq, Ord, Show)
 type MediaType = Text
-type Charset = Text
-data MediaInfo = MediaInfo
-  { mediaType :: MediaType
-  , mediaCharset :: Maybe Charset
-  }
 data File = File
   { fileId :: FileId
-  , fileMediaInfo :: MediaInfo
+  , fileMediaType :: MediaType
   , fileData :: ByteString
   }
 
@@ -57,27 +50,26 @@ class Monad m => FileGet m where
 -- This is a low-level class used for implementation.  If you want to put a file
 -- in the store, use putFileByteString or putFileFromFilePath.
 class Monad m => FilePut m v where
-  putFile :: FileId -> MediaInfo -> v -> m ()
+  putFile :: FileId -> MediaType -> v -> m ()
 
-class MediaInfoDiscover m v where
-  getMediaInfo :: v -> m MediaInfo
+class MediaTypeDiscover m v where
+  getMediaType :: v -> m MediaType
 
 class FileSystemRead m where
   readFile :: FilePath -> m ByteString
 
-logMediaInfo
+logMediaType
   :: MonadLogger m
-  => MediaInfo
-  -> m MediaInfo
-logMediaInfo mediaInfo@(MediaInfo contentType maybeCharset) = do
-  let charset = fromMaybe "unknown" maybeCharset
-  logInfoN $ "This content has content type \"" <> contentType <> "\" and charset \"" <> charset <> "\"."
-  pure mediaInfo
+  => MediaType
+  -> m MediaType
+logMediaType mediaType = do
+  logInfoN $ "This content has content type \"" <> mediaType <> "\""
+  pure mediaType
 
 putFileByteString
   :: ( FileGet m
      , FilePut m ByteString
-     , MediaInfoDiscover m ByteString
+     , MediaTypeDiscover m ByteString
      , MonadLogger m
      )
   => ByteString
@@ -100,7 +92,7 @@ putFileByteString bs = do
     else do
       logInfoN "This content does not exist in the store; adding."
 
-      mediaInfo <- getMediaInfo bs >>= logMediaInfo
+      mediaInfo <- getMediaType bs >>= logMediaType
 
       putFile fileId mediaInfo bs
 
@@ -111,7 +103,7 @@ putFileByteString bs = do
 putFileFromFilePath
   :: ( FileGet m
      , FilePut m ByteString
-     , MediaInfoDiscover m FilePath
+     , MediaTypeDiscover m FilePath
      , FileSystemRead m
      , MonadLogger m
      )
@@ -138,8 +130,8 @@ putFileFromFilePath fp = do
     else do
       logInfoN "This content does not exist in the store; adding."
 
-      -- Get the file's MediaInfo
-      mediaInfo <- getMediaInfo fp
+      -- Get the file's MediaType
+      mediaInfo <- getMediaType fp
 
       -- Put the file
       putFile fileId mediaInfo bs

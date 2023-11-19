@@ -20,7 +20,7 @@ import qualified System.Directory as D
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
-import RainbowHash (FileId(..), Hash, FileGet(..), putFileByteString, File(..), MediaInfo(..))
+import RainbowHash (FileId(..), Hash, FileGet(..), putFileByteString, File(..), MediaType)
 import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 
@@ -78,12 +78,6 @@ handleUpload = do
       addHeader "Location" (fileIdToUrl fileId)
       homeView
 
-mediaInfoToContentType
-  :: MediaInfo
-  -> TL.Text
-mediaInfoToContentType (MediaInfo mediaType maybeCharset) =
-  TL.fromStrict $ mediaType <> maybe "" ("; charset=" <>) maybeCharset
-
 getBlob :: Text -> ActionM ()
 getBlob hash = do
   let fileId = FileId hash
@@ -91,10 +85,9 @@ getBlob hash = do
   maybeFile <- liftIO $ runAppIO (RH.getFile fileId) env
   case maybeFile of
     Nothing -> notFound'
-    Just (File _ mediaInfo bs) -> do
-      let contentType = mediaInfoToContentType mediaInfo
-          strictData = LB.fromStrict bs
-      setHeader "Content-Type" contentType
+    Just (File _ mediaType bs) -> do
+      let strictData = LB.fromStrict bs
+      setHeader "Content-Type" (TL.fromStrict mediaType)
       raw strictData
     where notFound' :: ActionM ()
           notFound' = status status404
