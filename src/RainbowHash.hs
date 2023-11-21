@@ -92,9 +92,9 @@ putFileByteString bs = do
     else do
       logInfoN "This content does not exist in the store; adding."
 
-      mediaInfo <- getMediaType bs >>= logMediaType
+      mediaType <- getMediaType bs >>= logMediaType
 
-      putFile fileId mediaInfo bs
+      putFile fileId mediaType bs
 
       logInfoN "Put file complete."
 
@@ -131,10 +131,10 @@ putFileFromFilePath fp = do
       logInfoN "This content does not exist in the store; adding."
 
       -- Get the file's MediaType
-      mediaInfo <- getMediaType fp
+      mediaType <- getMediaType fp >>= logMediaType
 
       -- Put the file
-      putFile fileId mediaInfo bs
+      putFile fileId mediaType bs
 
       logInfoN "Put file complete."
 
