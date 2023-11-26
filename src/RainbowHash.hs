@@ -26,6 +26,7 @@ import Data.Aeson (ToJSON(..), genericToJSON, defaultOptions, fieldLabelModifier
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
 import qualified System.Directory as D
+import System.FilePath (splitFileName)
 import qualified Crypto.Hash as C
 import Data.Bool (not)
 import Data.List (isSuffixOf)
@@ -35,6 +36,7 @@ import Control.Monad.Logger (MonadLogger(..), logInfoN, logWarnN)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NES
 import Data.Time (UTCTime)
+import qualified Data.Text as T
 
 import RainbowHash.Env (Env(..))
 
@@ -98,8 +100,9 @@ putFileByteString
      , MonadLogger m
      )
   => ByteString
+  -> FileName
   -> m FileId
-putFileByteString bs = do
+putFileByteString bs fileName = do
   logInfoN "Adding content to store."
 
   -- Get the file's hash
@@ -120,8 +123,7 @@ putFileByteString bs = do
 
       mediaType <- getMediaType bs >>= logMediaType
       time <- getCurrentTime
-      let fileName = "unknown_file_name" -- TODO: get actual file name as parameter
-          fileNames = NES.singleton fileName
+      let fileNames = NES.singleton fileName
           metadata = Metadata mediaType fileNames time
 
       putFile fileId metadata bs
@@ -130,6 +132,11 @@ putFileByteString bs = do
 
   pure fileId
 
+-- Put the file at the given path in the store. The file's name will be stored
+-- as metadata. If you'd like to use a different file name for the metadata (if,
+-- for example, the file at the given path is different from the name on the
+-- client and you want to record the client name), the use putFileFromFilePath'
+-- instead.
 putFileFromFilePath
   :: ( FileGet m
      , FilePut m ByteString
@@ -138,9 +145,28 @@ putFileFromFilePath
      , CurrentTime m
      , MonadLogger m
      )
-  => FilePath
+  => FilePath -- ^The path to the file that is accessible by the server.
   -> m FileId
-putFileFromFilePath fp = do
+putFileFromFilePath fp =
+  fp & splitFileName
+    <&> T.pack
+     & uncurry putFileFromFilePath'
+
+-- Put the file at the given path in the store. The given file name is used for
+-- metadata rather than the name of the file at the given path.  If these file
+-- names are the same, then use putFileFromFilePath instead.
+putFileFromFilePath'
+  :: ( FileGet m
+     , FilePut m ByteString
+     , MediaTypeDiscover m FilePath
+     , FileSystemRead m
+     , CurrentTime m
+     , MonadLogger m
+     )
+  => FilePath -- ^The path to the file that is accessible by the server.
+  -> FileName -- ^The name of the file on the client.
+  -> m FileId
+putFileFromFilePath' fp fileName = do
   logInfoN "Adding content to store."
 
   -- Read the file's content
@@ -164,8 +190,7 @@ putFileFromFilePath fp = do
       -- Get the file's MediaType
       mediaType <- getMediaType fp >>= logMediaType
       time <- getCurrentTime
-      let fileName = "unknown_file_name" -- TODO: get actual file name as parameter
-          fileNames = NES.singleton fileName
+      let fileNames = NES.singleton fileName
           metadata = Metadata mediaType fileNames time
 
       -- Put the file

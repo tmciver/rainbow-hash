@@ -16,6 +16,7 @@ import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as LB
 import Data.String (fromString)
 import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Encoding as T
 import qualified System.Directory as D
 import Network.HTTP.Types.Status (status201)
 
@@ -72,8 +73,9 @@ handleUpload = do
     Nothing -> pure ()
     Just (_, fi) -> do
       let fcontent = LB.toStrict $ fileContent fi
+          fileName' = T.decodeUtf8 $ fileName fi
       env <- rhEnv
-      fileId <- liftIO $ runAppIO (putFileByteString fcontent) env
+      fileId <- liftIO $ runAppIO (putFileByteString fcontent fileName') env
       status status201
       addHeader "Location" (fileIdToUrl fileId)
       homeView
