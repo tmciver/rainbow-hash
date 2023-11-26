@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module RainbowHash
   ( putFileByteString
@@ -14,11 +15,14 @@ module RainbowHash
   , FilePut(..)
   , MediaTypeDiscover(..)
   , MediaType
+  , Metadata(..)
   , FileSystemRead(..)
+  , CurrentTime(..)
   ) where
 
 import Protolude hiding (readFile)
 
+import Data.Aeson (ToJSON(..), genericToJSON, defaultOptions, fieldLabelModifier, camelTo2, genericParseJSON, FromJSON(..))
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
 import qualified System.Directory as D
@@ -28,6 +32,9 @@ import Data.List (isSuffixOf)
 import Data.List.Split (splitOn)
 import Data.Maybe (fromMaybe)
 import Control.Monad.Logger (MonadLogger(..), logInfoN, logWarnN)
+import Data.Set.NonEmpty (NESet)
+import qualified Data.Set.NonEmpty as NES
+import Data.Time (UTCTime)
 
 import RainbowHash.Env (Env(..))
 
@@ -36,9 +43,23 @@ type Hash = Text
 newtype FileId = FileId { getHash :: Hash }
   deriving (Eq, Ord, Show)
 type MediaType = Text
+type FileName = Text
+data Metadata = Metadata
+  { mediaType :: MediaType
+  , fileNames :: NESet FileName
+  , uploadedAt :: UTCTime
+  } deriving (Eq, Show, Generic)
+
+-- TODO: consider moving this to a second library to keep this module abstract.
+instance ToJSON Metadata where
+  toJSON = genericToJSON defaultOptions { fieldLabelModifier = camelTo2 '_'}
+
+instance FromJSON Metadata where
+  parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = camelTo2 '_'}
+
 data File = File
   { fileId :: FileId
-  , fileMediaType :: MediaType
+  , fileMetadata :: Metadata
   , fileData :: ByteString
   }
 
@@ -50,13 +71,16 @@ class Monad m => FileGet m where
 -- This is a low-level class used for implementation.  If you want to put a file
 -- in the store, use putFileByteString or putFileFromFilePath.
 class Monad m => FilePut m v where
-  putFile :: FileId -> MediaType -> v -> m ()
+  putFile :: FileId -> Metadata -> v -> m ()
 
 class MediaTypeDiscover m v where
   getMediaType :: v -> m MediaType
 
 class FileSystemRead m where
   readFile :: FilePath -> m ByteString
+
+class CurrentTime m where
+  getCurrentTime :: m UTCTime
 
 logMediaType
   :: MonadLogger m
@@ -70,6 +94,7 @@ putFileByteString
   :: ( FileGet m
      , FilePut m ByteString
      , MediaTypeDiscover m ByteString
+     , CurrentTime m
      , MonadLogger m
      )
   => ByteString
@@ -89,12 +114,17 @@ putFileByteString bs = do
   -- Put the file in the store if it doesn't already exist.
   if exists
     then logInfoN "This content already exists in the store; not adding."
+    -- TODO: get exising metadata and add this file name to the set of file names.
     else do
       logInfoN "This content does not exist in the store; adding."
 
       mediaType <- getMediaType bs >>= logMediaType
+      time <- getCurrentTime
+      let fileName = "unknown_file_name" -- TODO: get actual file name as parameter
+          fileNames = NES.singleton fileName
+          metadata = Metadata mediaType fileNames time
 
-      putFile fileId mediaType bs
+      putFile fileId metadata bs
 
       logInfoN "Put file complete."
 
@@ -105,6 +135,7 @@ putFileFromFilePath
      , FilePut m ByteString
      , MediaTypeDiscover m FilePath
      , FileSystemRead m
+     , CurrentTime m
      , MonadLogger m
      )
   => FilePath
@@ -132,9 +163,13 @@ putFileFromFilePath fp = do
 
       -- Get the file's MediaType
       mediaType <- getMediaType fp >>= logMediaType
+      time <- getCurrentTime
+      let fileName = "unknown_file_name" -- TODO: get actual file name as parameter
+          fileNames = NES.singleton fileName
+          metadata = Metadata mediaType fileNames time
 
       -- Put the file
-      putFile fileId mediaType bs
+      putFile fileId metadata bs
 
       logInfoN "Put file complete."
 

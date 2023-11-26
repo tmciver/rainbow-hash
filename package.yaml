@@ -27,6 +27,7 @@ library:
   source-dirs: src
   dependencies:
   - protolude
+  - aeson
   - bytestring
   - containers
   - directory
@@ -35,10 +36,13 @@ library:
   - hashing
   - monad-logger
   - mtl
+  - nonempty-containers
   - split
   - temporary
   - text
+  - time
   - transformers
+  - yaml
 
 executables:
   rh-server:

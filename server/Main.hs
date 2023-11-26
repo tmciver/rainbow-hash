@@ -20,7 +20,7 @@ import qualified System.Directory as D
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
-import RainbowHash (FileId(..), Hash, FileGet(..), putFileByteString, File(..), MediaType)
+import RainbowHash (FileId(..), Hash, FileGet(..), putFileByteString, File(..), Metadata(Metadata))
 import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 
@@ -85,7 +85,7 @@ getBlob hash = do
   maybeFile <- liftIO $ runAppIO (RH.getFile fileId) env
   case maybeFile of
     Nothing -> notFound'
-    Just (File _ mediaType bs) -> do
+    Just (File _ (Metadata mediaType _ _) bs) -> do
       let strictData = LB.fromStrict bs
       setHeader "Content-Type" (TL.fromStrict mediaType)
       raw strictData

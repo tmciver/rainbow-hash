@@ -12,6 +12,7 @@ module RainbowHash.App
 
 import Protolude
 
+import qualified Data.Time as DT
 import qualified Data.Set as Set
 import qualified System.Directory as D
 import qualified Data.ByteString as BS
@@ -19,7 +20,7 @@ import Control.Monad.Reader (ReaderT)
 import Control.Monad.IO.Class (MonadIO)
 import Magic
 import Control.Monad (join)
-import Control.Monad.Logger (MonadLogger(..), toLogStr, fromLogStr)
+import Control.Monad.Logger (MonadLogger(..), toLogStr, fromLogStr, logErrorN)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
@@ -27,9 +28,10 @@ import System.FilePath (FilePath, (</>), takeDirectory)
 import System.IO (hFlush)
 import System.IO.Temp (withSystemTempFile)
 import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
+import qualified Data.Yaml as YAML
 
 import RainbowHash.Env (Env(..))
-import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), MediaType, File(..), FileSystemRead(..))
+import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), MediaType, File(..), FileSystemRead(..), Metadata(..), CurrentTime(..))
 
 newtype App a = App { runApp :: ReaderT Env IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env, MonadMask, MonadCatch, MonadThrow)
@@ -49,21 +51,41 @@ fileIdToFilePath (FileId hash) = do
 defaultMediaType :: MediaType
 defaultMediaType = "application/octet-stream"
 
-mediaInfoFileSuffix :: Text
-mediaInfoFileSuffix = "_metadata.txt"
+metadataFileSuffix :: Text
+metadataFileSuffix = "_metadata.yaml"
 
 getMediaTypeForFile
   :: FileId
   -> App (Maybe MediaType)
 getMediaTypeForFile fileId = do
-  mediaInfoFilePath <- fileIdToFilePath fileId <&> (<> T.unpack mediaInfoFileSuffix)
-  liftIO $ Just . parseMediaTypeFromMetadata <$> T.readFile mediaInfoFilePath
+  metadataFilePath <- fileIdToFilePath fileId <&> (<> T.unpack metadataFileSuffix)
+  liftIO $ Just . parseMediaTypeFromMetadata <$> T.readFile metadataFilePath
 
 metadataContentTypePrefix :: Text
 metadataContentTypePrefix = "content-type: "
 
 parseMediaTypeFromMetadata :: Text -> MediaType
 parseMediaTypeFromMetadata t = fromMaybe defaultMediaType (T.stripPrefix metadataContentTypePrefix t)
+
+readFileMetadata
+  :: FileId
+  -> App (Maybe Metadata)
+readFileMetadata fileId = do
+  metadataFile <- (<> T.unpack metadataFileSuffix) <$> fileIdToFilePath fileId
+  e <- liftIO $ YAML.decodeFileEither metadataFile
+  case e of
+    Left err -> do
+      logErrorN $ "Error attempting to parse metadata file " <> T.pack metadataFile <> ": " <> T.pack (displayException err)
+      pure Nothing
+    Right metadata -> pure metadata
+
+writeFileMetadata
+  :: FileId
+  -> Metadata
+  -> App ()
+writeFileMetadata fileId metadata = do
+  metadataFile <- (<> T.unpack metadataFileSuffix) <$> fileIdToFilePath fileId
+  liftIO $ YAML.encodeFile metadataFile metadata
 
 instance FileGet App where
   getFile fileId = do
@@ -72,9 +94,12 @@ instance FileGet App where
     if exists'
       then do
         bs <- liftIO (BS.readFile fp)
-        maybeMediaType <- getMediaTypeForFile fileId
-        let mediaType = fromMaybe defaultMediaType maybeMediaType
-        pure . Just $ File fileId mediaType bs
+        maybeMetadata <- readFileMetadata fileId
+        case maybeMetadata of
+          Nothing -> do
+            logErrorN $ "Could not get metadata for file " <> show (getHash fileId)
+            pure Nothing
+          Just metadata -> pure . Just $ File fileId metadata bs
       else pure Nothing
 
   fileExists fileId =
@@ -92,14 +117,12 @@ instance FileGet App where
               pure $ fmap (FileId . T.pack . (firstTwo <>)) subHashes
 
 instance FilePut App ByteString where
-  putFile fileId mediaType bs = do
+  putFile fileId metadata bs = do
     dataFilePath <- fileIdToFilePath fileId
-    let metadataFilePath = dataFilePath <> T.unpack mediaInfoFileSuffix
-        dir = takeDirectory dataFilePath
-        mediaInfoText = "content-type: " <> mediaType
+    let dir = takeDirectory dataFilePath
     liftIO $ D.createDirectoryIfMissing True dir
     liftIO $ BS.writeFile dataFilePath bs
-    liftIO $ T.writeFile metadataFilePath mediaInfoText
+    writeFileMetadata fileId metadata
 
 instance MediaTypeDiscover App FilePath where
   getMediaType fp = do
@@ -119,6 +142,9 @@ instance MediaTypeDiscover App ByteString where
 
 instance FileSystemRead App where
   readFile = liftIO . BS.readFile
+
+instance CurrentTime App where
+  getCurrentTime = liftIO DT.getCurrentTime
 
 instance MonadLogger App where
   monadLoggerLog _ _ level msg =
