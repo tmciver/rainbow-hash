@@ -113,7 +113,7 @@ instance FileGet App where
       where fileIdsForDir :: FilePath -> FilePath -> IO [FileId]
             fileIdsForDir storageDir firstTwo = do
               allFiles <- D.listDirectory $ storageDir </> firstTwo
-              let subHashes = filter (not . (isSuffixOf "metadata.txt")) allFiles
+              let subHashes = filter (not . (isSuffixOf $ T.unpack metadataFileSuffix)) allFiles
               pure $ fmap (FileId . T.pack . (firstTwo <>)) subHashes
 
 instance FilePut App ByteString where
