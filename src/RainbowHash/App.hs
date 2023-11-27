@@ -10,7 +10,7 @@ module RainbowHash.App
   , runAppIO
   ) where
 
-import Protolude
+import Protolude hiding (readFile)
 
 import qualified Data.Time as DT
 import qualified Data.Set as Set
@@ -31,7 +31,7 @@ import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
 import qualified Data.Yaml as YAML
 
 import RainbowHash.Env (Env(..))
-import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), MediaType, File(..), FileSystemRead(..), Metadata(..), CurrentTime(..))
+import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), MediaType, File(..), FileSystemRead(..), Metadata(..), CurrentTime(..), ToByteString(..))
 
 newtype App a = App { runApp :: ReaderT Env IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env, MonadMask, MonadCatch, MonadThrow)
@@ -117,7 +117,7 @@ instance FileGet App where
               pure $ fmap (FileId . T.pack . (firstTwo <>)) subHashes
 
 instance FilePut App ByteString where
-  putFile fileId metadata bs = do
+  putFileInternal fileId metadata bs = do
     dataFilePath <- fileIdToFilePath fileId
     let dir = takeDirectory dataFilePath
     liftIO $ D.createDirectoryIfMissing True dir
@@ -145,6 +145,12 @@ instance FileSystemRead App where
 
 instance CurrentTime App where
   getCurrentTime = liftIO DT.getCurrentTime
+
+instance ToByteString App ByteString where
+  toByteString = pure
+
+instance ToByteString App FilePath where
+  toByteString = readFile
 
 instance MonadLogger App where
   monadLoggerLog _ _ level msg =

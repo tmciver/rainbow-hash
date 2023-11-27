@@ -21,7 +21,7 @@ import qualified System.Directory as D
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
-import RainbowHash (FileId(..), Hash, FileGet(..), putFileByteString, File(..), Metadata(Metadata))
+import RainbowHash (FileId(..), Hash, FileGet(..), File(..), Metadata(Metadata), putFile)
 import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 
@@ -75,7 +75,7 @@ handleUpload = do
       let fcontent = LB.toStrict $ fileContent fi
           fileName' = T.decodeUtf8 $ fileName fi
       env <- rhEnv
-      fileId <- liftIO $ runAppIO (putFileByteString fcontent fileName') env
+      fileId <- liftIO $ runAppIO (putFile fcontent fileName') env
       status status201
       addHeader "Location" (fileIdToUrl fileId)
       homeView
