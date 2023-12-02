@@ -1,7 +1,0 @@
-resolver: lts-18.8
-packages:
-- .
-extra-deps:
-nix:
-  enable: true
-  packages: [file zlib]

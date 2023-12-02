@@ -47,7 +47,9 @@ getSourceDir = do
             else panic ("Error: " <> T.pack tmpDir <> " does not exist.")
   return dir
 
-listFilesRecursively :: FilePath -> IO [FilePath]
+listFilesRecursively
+  :: FilePath
+  -> IO [FilePath]
 listFilesRecursively fp = do
   isDir <- doesDirectoryExist fp
   if isDir then do
@@ -57,21 +59,22 @@ listFilesRecursively fp = do
     return $ join ffs
     else return [fp]
 
-putFile' :: FilePath -- ^Path to storage directory.
-         -> FilePath -- ^Path to the file to store.
-         -> IO ()
+putFile'
+  :: FilePath -- ^Path to storage directory.
+  -> FilePath -- ^Path to the file to store.
+  -> IO ()
 putFile' storeDir fp = do
   let env = Env storeDir
   FileId hash <- runAppIO (putFile fp "foo.txt") env
   T.putStrLn ("Stored file whose content hash is: " <> hash)
 
-putFilesFromDirectory :: FilePath -- ^Path to storage directory.
-                      -> FilePath -- ^Path to source directory.
-                      -> IO ()
+putFilesFromDirectory
+  :: FilePath -- ^Path to storage directory.
+  -> FilePath -- ^Path to source directory.
+  -> IO ()
 putFilesFromDirectory storeDir sourceDir = do
   fs <- listFilesRecursively sourceDir
-  _ <- traverse (putFile' storeDir) fs
-  return ()
+  traverse_ (putFile' storeDir) fs
 
 main :: IO ()
 main = do
