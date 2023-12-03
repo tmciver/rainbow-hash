@@ -17,7 +17,7 @@ import qualified Data.ByteString as BS
 import RainbowHash
 import RainbowHash.Env (Env(..))
 import RainbowHash.App (runAppIO)
-import RainbowHash.CLI (Command(..), getCommand)
+import RainbowHash.CLI (Command(..), getCommand, runCommand)
 
 rainbowHashDir :: IO FilePath
 rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
@@ -78,9 +78,4 @@ putFilesFromDirectory storeDir sourceDir = do
   traverse_ (putFile' storeDir) fs
 
 main :: IO ()
-main = do
-  eitherCommand <- getCommand
-  case eitherCommand of
-    Left err -> putStrLn err
-    Right cmd -> case cmd of
-      WatchDir dir -> putStrLn ("You want to watch directory: " <> T.pack dir)
+main = getCommand >>= either putStrLn runCommand

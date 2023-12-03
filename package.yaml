@@ -78,6 +78,7 @@ executables:
     - protolude
     - directory
     - filepath
+    - fsnotify
     - bytestring
     - text
 
