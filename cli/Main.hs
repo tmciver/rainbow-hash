@@ -18,6 +18,7 @@ import RainbowHash
 import RainbowHash.Env (Env(..))
 import RainbowHash.App (runAppIO)
 import RainbowHash.CLI (Command(..), getCommand, runCommand)
+import RainbowHash.HttpClient (getConfig)
 
 rainbowHashDir :: IO FilePath
 rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"
@@ -78,4 +79,6 @@ putFilesFromDirectory storeDir sourceDir = do
   traverse_ (putFile' storeDir) fs
 
 main :: IO ()
-main = getCommand >>= either putStrLn runCommand
+main = do
+  config <- getConfig
+  getCommand >>= either putStrLn (\cmd -> runReaderT (runCommand cmd) config)

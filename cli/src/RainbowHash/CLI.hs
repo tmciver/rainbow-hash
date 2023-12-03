@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module RainbowHash.CLI
   ( Command(..)
@@ -32,26 +33,33 @@ getCommand = do
     [] -> Left "You must supply a command."
 
 runCommand
-  :: Command
-  -> IO ()
+  :: ( MonadReader Config m
+     , MonadIO m
+     )
+  => Command
+  -> m ()
 runCommand (WatchDir dir) = watchDirectory dir
 
-uploadAction :: Action
-uploadAction (Added fp _ False) = do
-  let config = Config "localhost" 3000
-  runHttpClient (postFile fp) config
-uploadAction (Added _ _ True) = putStrLn ("Directory added. Ignoring" :: Text)
-uploadAction e = putStrLn $ ("Ignoring event: " :: Text) <> show e
+uploadAction :: Config -> Action
+uploadAction config (Added fp _ False) = runHttpClient (postFile fp) config
+uploadAction _ (Added _ _ True) = putStrLn ("Directory added. Ignoring" :: Text)
+uploadAction _ e = putStrLn $ ("Ignoring event: " :: Text) <> show e
 
-watchDirectory :: FilePath -> IO ()
+watchDirectory
+  :: ( MonadReader Config m
+     , MonadIO m
+     )
+  => FilePath
+  -> m ()
 watchDirectory fp = do
-  withManager $ \mgr -> do
+  config <- ask
+  liftIO $ withManager $ \mgr -> do
     -- start a watching job (in the background)
     watchDir
       mgr          -- manager
       fp           -- directory to watch
       isFileAdded  -- predicate
-      uploadAction -- action
+      (uploadAction config) -- action
 
     -- sleep forever (until interrupted)
     forever $ threadDelay 1000000

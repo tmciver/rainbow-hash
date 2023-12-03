@@ -7,6 +7,7 @@ module RainbowHash.HttpClient
   , HttpClient
   , Config(..)
   , runHttpClient
+  , getConfig
   ) where
 
 import Protolude
@@ -23,19 +24,19 @@ newtype HttpClient a = HttpClient { unHttpClient :: ReaderT Config IO a }
 
 instance HttpWrite HttpClient where
   postFile fp = do
-    uri <- getRhURL
+    uri <- asks serverUri
     putStrLn $ "Uploading file at " <> T.pack fp <> " to " <> render uri
 
-data Config = Config
-  { getRhHost :: Text
-  , getRhPort :: Natural
+newtype Config = Config
+  { serverUri :: URI
   }
 
-getRhURL :: HttpClient URI
-getRhURL = do
-  Config host port <- ask
+getConfig :: IO Config
+getConfig = do
+  let host = "localhost"
+      port = 3000
   case mkURI ("http://" <> host <> ":" <> show port) of
-    Just uri -> pure uri
+    Just uri -> pure $ Config uri
     Nothing -> panic "Could not create a URI to the server."
 
 runHttpClient :: HttpClient a -> Config -> IO a
