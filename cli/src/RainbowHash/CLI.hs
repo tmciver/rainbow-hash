@@ -37,7 +37,9 @@ runCommand
 runCommand (WatchDir dir) = watchDirectory dir
 
 uploadAction :: Action
-uploadAction (Added fp _ False) = runHttpClient (postFile fp) Config
+uploadAction (Added fp _ False) = do
+  let config = Config "localhost" 3000
+  runHttpClient (postFile fp) config
 uploadAction (Added _ _ True) = putStrLn ("Directory added. Ignoring" :: Text)
 uploadAction e = putStrLn $ ("Ignoring event: " :: Text) <> show e
 
