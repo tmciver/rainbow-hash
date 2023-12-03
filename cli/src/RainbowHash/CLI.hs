@@ -13,6 +13,8 @@ import System.FSNotify
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
 
+import RainbowHash.HttpClient (postFile, runHttpClient, Config(..))
+
 import qualified Data.Text as T
 
 newtype Command
@@ -35,7 +37,7 @@ runCommand
 runCommand (WatchDir dir) = watchDirectory dir
 
 uploadAction :: Action
-uploadAction (Added fp _ False) = putStrLn $ "Uploading file at " <> T.pack fp
+uploadAction (Added fp _ False) = runHttpClient (postFile fp) Config
 uploadAction (Added _ _ True) = putStrLn ("Directory added. Ignoring" :: Text)
 uploadAction e = putStrLn $ ("Ignoring event: " :: Text) <> show e
 
