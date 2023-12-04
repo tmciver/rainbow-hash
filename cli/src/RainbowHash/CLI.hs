@@ -40,11 +40,6 @@ runCommand
   -> m ()
 runCommand (WatchDir dir) = watchDirectory dir
 
-uploadAction :: Config -> Action
-uploadAction config (Added fp _ False) = runHttpClient (postFile fp) config
-uploadAction _ (Added _ _ True) = putStrLn ("Directory added. Ignoring" :: Text)
-uploadAction _ e = putStrLn $ ("Ignoring event: " :: Text) <> show e
-
 watchDirectory
   :: ( MonadReader Config m
      , MonadIO m
@@ -67,3 +62,8 @@ watchDirectory fp = do
     where isFileAdded :: Event -> Bool
           isFileAdded Added{} = True
           isFileAdded _ = False
+
+uploadAction :: Config -> Action
+uploadAction config (Added fp _ False) = runHttpClient (postFile fp) config
+uploadAction _ (Added _ _ True) = putStrLn ("Directory added. Ignoring" :: Text)
+uploadAction _ e = putStrLn $ ("Ignoring event: " :: Text) <> show e

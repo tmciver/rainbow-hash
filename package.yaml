@@ -80,8 +80,12 @@ executables:
     - directory
     - filepath
     - fsnotify
+    - http-client
+    - http-types
+    - lens
     - modern-uri
     - text
+    - wreq
 
 tests:
   rainbow-hash-test:
