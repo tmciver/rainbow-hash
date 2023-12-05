@@ -12,14 +12,17 @@ module RainbowHash.HttpClient
 
 import Protolude
 
+import Data.Default
 import qualified Data.Text as T
 import GHC.Natural (Natural)
-import Text.URI (URI, mkURI, render, renderStr)
+import Text.URI (URI (..), mkURI, render, renderStr, Authority (..), unRText)
 import Network.HTTP.Client.MultipartFormData (partFile)
 import Network.Wreq (post, defaults, manager, postWith, checkResponse)
 import Network.HTTP.Client (Response(responseStatus), ManagerSettings (managerResponseTimeout), defaultManagerSettings, responseTimeoutMicro)
 import Network.HTTP.Types (statusIsSuccessful)
 import Control.Lens ((.~), (?~), set)
+import Data.Aeson (ToJSON (..), object, (.=), FromJSON (..), withObject, (.:))
+import Data.Maybe (fromJust)
 
 class HttpWrite m where
   postFile :: FilePath -> m ()
@@ -46,13 +49,51 @@ newtype Config = Config
   { serverUri :: URI
   }
 
+instance ToJSON Config where
+  toJSON (Config uri) =
+    let authority = either (panic "Could not get host from config") identity . uriAuthority $ uri
+        host = unRText . authHost $ authority
+        port = fromJust . authPort $ authority
+    in object
+       [ "server" .= object
+         [ "host" .= host
+         , "port" .= port
+         ]
+       ]
+
+getURI :: Text -> Natural -> URI
+getURI host port =
+  fromJust $ mkURI ("http://" <> host <> ":" <> show port)
+
+instance FromJSON Config where
+  parseJSON = withObject "Config" $ \o -> do
+    server <- o .: "server"
+    host <- server .: "host"
+    port <- server .: "port"
+    pure . Config $ getURI host port
+
+instance Default Config where
+  def = let host = "localhost"
+            port = 3000
+        in case mkURI ("http://" <> host <> ":" <> show port) of
+             Just uri -> Config uri
+             Nothing -> panic "Could not create a URI to the server."
+
 getConfig :: IO Config
 getConfig = do
-  let host = "localhost"
-      port = 3000
-  case mkURI ("http://" <> host <> ":" <> show port) of
-    Just uri -> pure $ Config uri
-    Nothing -> panic "Could not create a URI to the server."
+  maybeConfig <- getConfigFromFile
+  case maybeConfig of
+    Just config -> pure config
+    Nothing -> do
+      writeConfig def
+      pure def
+
+writeConfig :: Config -> IO ()
+writeConfig _ = pure ()
+
+getConfigFromFile :: IO (Maybe Config)
+getConfigFromFile = do
+  pure Nothing
 
 runHttpClient :: HttpClient a -> Config -> IO a
 runHttpClient = runReaderT . unHttpClient

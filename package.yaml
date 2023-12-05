@@ -76,7 +76,9 @@ executables:
     dependencies:
     - rainbow-hash
     - protolude
+    - aeson
     - bytestring
+    - data-default
     - directory
     - filepath
     - fsnotify
