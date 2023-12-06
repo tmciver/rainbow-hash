@@ -14,6 +14,13 @@ To build all the components, run
 
     $ cabal build all
 
+During development use
+
+    cabal build --ghc-options="-fforce-recomp" all
+
+To always show compiler warnings (they're suppressed after the first build
+otherwise.)
+
 ## Running
 
 To start the web server, run the following command:
