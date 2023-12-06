@@ -23,6 +23,9 @@ import Network.HTTP.Types (statusIsSuccessful)
 import Control.Lens ((.~), (?~), set)
 import Data.Aeson (ToJSON (..), object, (.=), FromJSON (..), withObject, (.:))
 import Data.Maybe (fromJust)
+import qualified System.Directory as D
+import System.FilePath ((</>), takeDirectory)
+import qualified Data.Yaml as YAML
 
 class HttpWrite m where
   postFile :: FilePath -> m ()
@@ -79,21 +82,30 @@ instance Default Config where
              Just uri -> Config uri
              Nothing -> panic "Could not create a URI to the server."
 
+getConfigFile :: IO FilePath
+getConfigFile = (</> "cli" </> "config.yaml") <$> D.getXdgDirectory D.XdgConfig "rainbowhash"
+
 getConfig :: IO Config
 getConfig = do
   maybeConfig <- getConfigFromFile
   case maybeConfig of
     Just config -> pure config
     Nothing -> do
-      writeConfig def
+      writeConfigToFile def
       pure def
 
-writeConfig :: Config -> IO ()
-writeConfig _ = pure ()
+writeConfigToFile :: Config -> IO ()
+writeConfigToFile config = do
+  configFile <- getConfigFile
+  YAML.encodeFile configFile config
 
 getConfigFromFile :: IO (Maybe Config)
 getConfigFromFile = do
-  pure Nothing
+  configFile <- getConfigFile
+  let configDir = takeDirectory configFile
+  D.createDirectoryIfMissing True configDir
+  eitherConfig <- YAML.decodeFileEither configFile
+  pure $ fromRight Nothing eitherConfig
 
 runHttpClient :: HttpClient a -> Config -> IO a
 runHttpClient = runReaderT . unHttpClient

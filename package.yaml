@@ -88,6 +88,7 @@ executables:
     - modern-uri
     - text
     - wreq
+    - yaml
 
 tests:
   rainbow-hash-test:
