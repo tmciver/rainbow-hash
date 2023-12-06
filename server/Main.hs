@@ -14,28 +14,21 @@ import Text.Blaze.Html.Renderer.Text (renderHtml)
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
-import qualified System.Directory as D
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
 import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile)
 import RainbowHash.App (runAppIO)
-import RainbowHash.Env (Env(..))
-
-rhEnv :: ActionM Env
-rhEnv = liftIO $ Env <$> D.getXdgDirectory D.XdgData "rainbowhash"
+import RainbowHash.Env (Env(..), getEnv)
 
 main :: IO ()
 main = do
-  createLocalStorageDir
+  env <- getEnv
   scotty 3000 $ do
     get "/" homeView
-    get "/blobs" showAllHashes
-    get "/blob/:hash" $ param "hash" >>= getBlob
-    post "/blobs" handleUpload
-
-createLocalStorageDir :: IO ()
-createLocalStorageDir = D.getXdgDirectory D.XdgData "rainbowhash" >>= D.createDirectoryIfMissing True
+    get "/blobs" (showAllHashes env)
+    get "/blob/:hash" $ param "hash" >>= getBlob env
+    post "/blobs" (handleUpload env)
 
 template :: Text -> H.Html -> H.Html
 template title' body' = H.docTypeHtml $ do
@@ -52,10 +45,10 @@ homeHtml = template "Home" $ do
   fileUploadForm
 
 homeLink :: H.Html
-homeLink = ((H.a . H.toHtml) ("Home" :: Text)) H.! href "/"
+homeLink = (H.a . H.toHtml) ("Home" :: Text) H.! href "/"
 
 contentListLink :: H.Html
-contentListLink = ((H.a . H.toHtml) ("See a list of all blobs." :: Text)) H.! href "/blobs"
+contentListLink = (H.a . H.toHtml) ("See a list of all blobs." :: Text) H.! href "/blobs"
 
 fileUploadForm :: H.Html
 fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! action "/blobs" $ do
@@ -63,24 +56,22 @@ fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! 
   H.br
   H.input H.! type_ "submit"
 
-handleUpload :: ActionM ()
-handleUpload = do
+handleUpload :: Env -> ActionM ()
+handleUpload env = do
   fs <- files
   case headMay fs of
     Nothing -> pure ()
     Just (_, fi) -> do
       let fcontent = LB.toStrict $ fileContent fi
           fileName' = T.decodeUtf8 $ fileName fi
-      env <- rhEnv
       fileId' <- liftIO $ runAppIO (putFile fcontent fileName') env
       status status201
       addHeader "Location" (fileIdToUrl fileId')
       homeView
 
-getBlob :: Text -> ActionM ()
-getBlob hash' = do
+getBlob :: Env -> Text -> ActionM ()
+getBlob env hash' = do
   let fileId' = FileId hash'
-  env <- rhEnv
   maybeFile <- liftIO $ runAppIO (RH.getFile fileId') env
   case maybeFile of
     Nothing -> notFound'
@@ -91,9 +82,8 @@ getBlob hash' = do
     where notFound' :: ActionM ()
           notFound' = status status404
 
-showAllHashes :: ActionM ()
-showAllHashes = do
-  env <- rhEnv
+showAllHashes :: Env -> ActionM ()
+showAllHashes env = do
   allHashes <- liftIO $ runAppIO allFileIds env
   html $ renderHtml $ hashesHtmlView allHashes
 
