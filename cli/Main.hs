@@ -18,7 +18,7 @@ import RainbowHash
 import RainbowHash.Env (Env(..))
 import RainbowHash.App (runAppIO)
 import RainbowHash.CLI (Command(..), getCommand, runCommand)
-import RainbowHash.HttpClient (getConfig)
+import RainbowHash.CLI.Config (getConfig)
 
 rainbowHashDir :: IO FilePath
 rainbowHashDir = D.getXdgDirectory D.XdgData "rainbowhash"

@@ -13,10 +13,10 @@ import Protolude
 import System.FSNotify
 import Control.Concurrent (threadDelay)
 import Control.Monad (forever)
-
-import RainbowHash.HttpClient (postFile, runHttpClient, Config(..))
-
 import qualified Data.Text as T
+
+import RainbowHash.CLI.Config (Config)
+import RainbowHash.HttpClient (postFile, runHttpClient)
 
 newtype Command
   = WatchDir FilePath
