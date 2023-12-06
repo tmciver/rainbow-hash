@@ -25,6 +25,8 @@ dependencies:
 
 library:
   source-dirs: src
+  ghc-options:
+  - -Wall
   dependencies:
   - protolude
   - aeson
@@ -52,6 +54,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
     dependencies:
     - rainbow-hash
     - protolude
@@ -66,18 +69,30 @@ executables:
 
   rh-cli:
     main:                Main.hs
-    source-dirs:         cli
+    source-dirs:
+    - cli
+    - cli/src
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
     dependencies:
     - rainbow-hash
     - protolude
+    - aeson
+    - bytestring
+    - data-default
     - directory
     - filepath
-    - bytestring
+    - fsnotify
+    - http-client
+    - http-types
+    - lens
+    - modern-uri
     - text
+    - wreq
+    - yaml
 
 tests:
   rainbow-hash-test:

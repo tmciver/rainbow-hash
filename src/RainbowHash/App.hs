@@ -2,7 +2,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module RainbowHash.App
@@ -16,22 +15,19 @@ import qualified Data.Time as DT
 import qualified Data.Set as Set
 import qualified System.Directory as D
 import qualified Data.ByteString as BS
-import Control.Monad.Reader (ReaderT)
-import Control.Monad.IO.Class (MonadIO)
 import Magic
-import Control.Monad (join)
 import Control.Monad.Logger (MonadLogger(..), toLogStr, fromLogStr, logErrorN)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
-import System.FilePath (FilePath, (</>), takeDirectory)
+import System.FilePath ((</>), takeDirectory)
 import System.IO (hFlush)
 import System.IO.Temp (withSystemTempFile)
 import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
 import qualified Data.Yaml as YAML
 
 import RainbowHash.Env (Env(..))
-import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), MediaType, File(..), FileSystemRead(..), Metadata(..), CurrentTime(..), ToByteString(..))
+import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), File(..), FileSystemRead(..), Metadata(..), CurrentTime(..), ToByteString(..))
 
 newtype App a = App { runApp :: ReaderT Env IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env, MonadMask, MonadCatch, MonadThrow)
@@ -42,36 +38,20 @@ runAppIO = runReaderT . runApp
 fileIdToFilePath
   :: FileId       -- ^The ID of a file.
   -> App FilePath -- ^The absolute path to the file with the given hash. May not exist.
-fileIdToFilePath (FileId hash) = do
+fileIdToFilePath (FileId h) = do
   storeDir <- asks storageDir
-  let (d,f) = T.splitAt 2 hash
+  let (d,f) = T.splitAt 2 h
       filePath = storeDir </> T.unpack d </> T.unpack f
   pure filePath
-
-defaultMediaType :: MediaType
-defaultMediaType = "application/octet-stream"
 
 metadataFileSuffix :: Text
 metadataFileSuffix = "_metadata.yaml"
 
-getMediaTypeForFile
-  :: FileId
-  -> App (Maybe MediaType)
-getMediaTypeForFile fileId = do
-  metadataFilePath <- fileIdToFilePath fileId <&> (<> T.unpack metadataFileSuffix)
-  liftIO $ Just . parseMediaTypeFromMetadata <$> T.readFile metadataFilePath
-
-metadataContentTypePrefix :: Text
-metadataContentTypePrefix = "content-type: "
-
-parseMediaTypeFromMetadata :: Text -> MediaType
-parseMediaTypeFromMetadata t = fromMaybe defaultMediaType (T.stripPrefix metadataContentTypePrefix t)
-
 readFileMetadata
   :: FileId
   -> App (Maybe Metadata)
-readFileMetadata fileId = do
-  metadataFile <- (<> T.unpack metadataFileSuffix) <$> fileIdToFilePath fileId
+readFileMetadata fileId' = do
+  metadataFile <- (<> T.unpack metadataFileSuffix) <$> fileIdToFilePath fileId'
   e <- liftIO $ YAML.decodeFileEither metadataFile
   case e of
     Left err -> do
@@ -83,46 +63,46 @@ writeFileMetadata
   :: FileId
   -> Metadata
   -> App ()
-writeFileMetadata fileId metadata = do
-  metadataFile <- (<> T.unpack metadataFileSuffix) <$> fileIdToFilePath fileId
+writeFileMetadata fileId' metadata = do
+  metadataFile <- (<> T.unpack metadataFileSuffix) <$> fileIdToFilePath fileId'
   liftIO $ YAML.encodeFile metadataFile metadata
 
 instance FileGet App where
-  getFile fileId = do
-    fp <- fileIdToFilePath fileId
+  getFile fileId' = do
+    fp <- fileIdToFilePath fileId'
     exists' <- liftIO $ D.doesFileExist fp
     if exists'
       then do
         bs <- liftIO (BS.readFile fp)
-        maybeMetadata <- readFileMetadata fileId
+        maybeMetadata <- readFileMetadata fileId'
         case maybeMetadata of
           Nothing -> do
-            logErrorN $ "Could not get metadata for file " <> show (getHash fileId)
+            logErrorN $ "Could not get metadata for file " <> show (getHash fileId')
             pure Nothing
-          Just metadata -> pure . Just $ File fileId metadata bs
+          Just metadata -> pure . Just $ File fileId' metadata bs
       else pure Nothing
 
-  fileExists fileId =
-    fileIdToFilePath fileId >>= liftIO . D.doesFileExist
+  fileExists fileId' =
+    fileIdToFilePath fileId' >>= liftIO . D.doesFileExist
 
   allFileIds = do
-    storageDir <- asks storageDir
-    firstTwo <- liftIO $ D.listDirectory storageDir
-    fileIds <- liftIO $ sequence $ fmap (fileIdsForDir storageDir) firstTwo
+    storageDir' <- asks storageDir
+    firstTwo <- liftIO $ D.listDirectory storageDir'
+    fileIds <- liftIO $ mapM (fileIdsForDir storageDir') firstTwo
     pure . Set.fromList $ join fileIds
       where fileIdsForDir :: FilePath -> FilePath -> IO [FileId]
-            fileIdsForDir storageDir firstTwo = do
-              allFiles <- D.listDirectory $ storageDir </> firstTwo
-              let subHashes = filter (not . (isSuffixOf $ T.unpack metadataFileSuffix)) allFiles
+            fileIdsForDir storageDir' firstTwo = do
+              allFiles <- D.listDirectory $ storageDir' </> firstTwo
+              let subHashes = filter (not . isSuffixOf (T.unpack metadataFileSuffix)) allFiles
               pure $ fmap (FileId . T.pack . (firstTwo <>)) subHashes
 
 instance FilePut App ByteString where
-  putFileInternal fileId metadata bs = do
-    dataFilePath <- fileIdToFilePath fileId
+  putFileInternal fileId' metadata bs = do
+    dataFilePath <- fileIdToFilePath fileId'
     let dir = takeDirectory dataFilePath
     liftIO $ D.createDirectoryIfMissing True dir
     liftIO $ BS.writeFile dataFilePath bs
-    writeFileMetadata fileId metadata
+    writeFileMetadata fileId' metadata
 
 instance MediaTypeDiscover App FilePath where
   getMediaType fp = do
@@ -154,4 +134,4 @@ instance ToByteString App FilePath where
 
 instance MonadLogger App where
   monadLoggerLog _ _ level msg =
-    liftIO $ T.putStrLn $ (show level) <> " " <> (T.decodeUtf8 . fromLogStr . toLogStr) msg
+    liftIO $ T.putStrLn $ show level <> " " <> (T.decodeUtf8 . fromLogStr . toLogStr) msg
