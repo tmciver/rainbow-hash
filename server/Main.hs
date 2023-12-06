@@ -11,17 +11,14 @@ import Network.Wai.Parse
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 import Text.Blaze.Html.Renderer.Text (renderHtml)
-import Control.Monad (forM_)
-import Control.Monad.IO.Class
 import qualified Data.ByteString.Lazy as LB
-import Data.String (fromString)
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import qualified System.Directory as D
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
-import RainbowHash (FileId(..), Hash, FileGet(..), File(..), Metadata(Metadata), putFile)
+import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile)
 import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 
@@ -75,16 +72,16 @@ handleUpload = do
       let fcontent = LB.toStrict $ fileContent fi
           fileName' = T.decodeUtf8 $ fileName fi
       env <- rhEnv
-      fileId <- liftIO $ runAppIO (putFile fcontent fileName') env
+      fileId' <- liftIO $ runAppIO (putFile fcontent fileName') env
       status status201
-      addHeader "Location" (fileIdToUrl fileId)
+      addHeader "Location" (fileIdToUrl fileId')
       homeView
 
 getBlob :: Text -> ActionM ()
-getBlob hash = do
-  let fileId = FileId hash
+getBlob hash' = do
+  let fileId' = FileId hash'
   env <- rhEnv
-  maybeFile <- liftIO $ runAppIO (RH.getFile fileId) env
+  maybeFile <- liftIO $ runAppIO (RH.getFile fileId') env
   case maybeFile of
     Nothing -> notFound'
     Just (File _ (Metadata mediaType _ _) bs) -> do
@@ -109,4 +106,4 @@ fileIdToUrl :: FileId -> TL.Text
 fileIdToUrl = TL.fromStrict . ("/blob/" <>) . getHash
 
 fileIdToAnchor :: FileId -> H.Html
-fileIdToAnchor fileId = ((H.a . H.toHtml) (getHash fileId)) H.! href (H.textValue $ toStrict $ fileIdToUrl fileId)
+fileIdToAnchor fileId' = (H.a . H.toHtml) (getHash fileId') H.! href (H.textValue $ toStrict $ fileIdToUrl fileId')

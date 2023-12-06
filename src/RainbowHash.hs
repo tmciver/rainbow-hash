@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -7,6 +6,7 @@
 
 module RainbowHash
   ( putFile
+  , putFileFromFilePath
   , Hash
   , File(..)
   , FileId(..)
@@ -24,21 +24,13 @@ import Protolude hiding (readFile)
 
 import Data.Aeson (ToJSON(..), genericToJSON, defaultOptions, fieldLabelModifier, camelTo2, genericParseJSON, FromJSON(..))
 import qualified Data.ByteString as B
-import Data.ByteString (ByteString)
-import qualified System.Directory as D
 import System.FilePath (takeFileName)
 import qualified Crypto.Hash as C
-import Data.Bool (not)
-import Data.List (isSuffixOf)
-import Data.List.Split (splitOn)
-import Data.Maybe (fromMaybe)
-import Control.Monad.Logger (MonadLogger(..), logInfoN, logWarnN)
+import Control.Monad.Logger (MonadLogger(..), logInfoN)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NES
 import Data.Time (UTCTime)
 import qualified Data.Text as T
-
-import RainbowHash.Env (Env(..))
 
 type Hash = Text
 
@@ -91,9 +83,9 @@ logMediaType
   :: MonadLogger m
   => MediaType
   -> m MediaType
-logMediaType mediaType = do
-  logInfoN $ "This content has content type \"" <> mediaType <> "\""
-  pure mediaType
+logMediaType mediaType' = do
+  logInfoN $ "This content has content type \"" <> mediaType' <> "\""
+  pure mediaType'
 
 putFile
   :: ( FileGet m
@@ -113,13 +105,13 @@ putFile v fileName = do
   bs <- toByteString v
 
   -- Get the file's hash
-  let hash = calcHash bs
-      fileId = FileId hash
+  let hash' = calcHash bs
+      fileId' = FileId hash'
 
-  logInfoN $ "This content has hash identifier " <> hash
+  logInfoN $ "This content has hash identifier " <> hash'
 
   -- See if the file exists already.
-  exists <- fileExists fileId
+  exists <- fileExists fileId'
 
   -- Put the file in the store if it doesn't already exist.
   if exists
@@ -128,16 +120,16 @@ putFile v fileName = do
     else do
       logInfoN "This content does not exist in the store; adding."
 
-      mediaType <- getMediaType v >>= logMediaType
+      mediaType' <- getMediaType v >>= logMediaType
       time <- getCurrentTime
-      let fileNames = NES.singleton fileName
-          metadata = Metadata mediaType fileNames time
+      let fileNames' = NES.singleton fileName
+          metadata = Metadata mediaType' fileNames' time
 
-      putFileInternal fileId metadata bs
+      putFileInternal fileId' metadata bs
 
       logInfoN "Put file complete."
 
-  pure fileId
+  pure fileId'
 
 -- Put the file at the given path in the store. The file's name will be stored
 -- as metadata. If you'd like to use a different file name for the metadata (if,
@@ -160,4 +152,4 @@ putFileFromFilePath fp = do
 
 -- | Return the 'Hash' of the given 'ByteString'.
 calcHash :: B.ByteString -> Hash
-calcHash bs = show $ (C.hash bs :: C.SHA256)
+calcHash bs = show (C.hash bs :: C.SHA256)
