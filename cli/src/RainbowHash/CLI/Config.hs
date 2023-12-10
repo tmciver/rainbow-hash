@@ -10,8 +10,7 @@ import Protolude
 
 import Data.Aeson (ToJSON (..), object, (.=), FromJSON (..), withObject, (.:))
 import GHC.Natural (Natural)
-import Text.URI (URI (..), mkURI, render, renderStr, Authority (..), unRText)
-import Control.Lens ((.~), (?~), set)
+import Text.URI (URI (..), mkURI, Authority (..), unRText)
 import Data.Maybe (fromJust)
 import qualified System.Directory as D
 import System.FilePath ((</>), takeDirectory)
@@ -47,6 +46,7 @@ instance FromJSON Config where
 
 instance Default Config where
   def = let host = "localhost"
+            port :: Natural
             port = 3000
         in case mkURI ("http://" <> host <> ":" <> show port) of
              Just uri -> Config uri

@@ -12,7 +12,7 @@ import Protolude
 
 import qualified Data.Text as T
 import Network.HTTP.Client.MultipartFormData (partFile)
-import Network.Wreq (post, defaults, manager, postWith, checkResponse)
+import Network.Wreq (defaults, manager, postWith, checkResponse)
 import Network.HTTP.Client (Response(responseStatus), ManagerSettings (managerResponseTimeout), defaultManagerSettings, responseTimeoutMicro)
 import Network.HTTP.Types (statusIsSuccessful)
 import RainbowHash.CLI.Config (Config(..))
