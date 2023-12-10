@@ -49,7 +49,9 @@ library:
 executables:
   rh-server:
     main:                Main.hs
-    source-dirs:         server
+    source-dirs:
+    - server
+    - server/src
     ghc-options:
     - -threaded
     - -rtsopts
