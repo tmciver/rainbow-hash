@@ -22,10 +22,12 @@ import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 import RainbowHash.Server.StorageDirectory (getStorageDir)
 import qualified Data.Text as T
+import System.Directory (createDirectoryIfMissing)
 
 main :: IO ()
 main = do
-  env <- getEnv
+  env@(Env dir') <- getEnv
+  createDirectoryIfMissing True dir'
   showEnv env
   scotty 3000 $ do
     get "/" homeView

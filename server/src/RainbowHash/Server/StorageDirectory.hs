@@ -6,13 +6,10 @@ module RainbowHash.Server.StorageDirectory
 
 import Protolude
 
-import System.Directory (getXdgDirectory, XdgDirectory (XdgData), createDirectoryIfMissing)
+import System.Directory (getXdgDirectory, XdgDirectory (XdgData))
 
 getDefaultStorageDir :: IO FilePath
-getDefaultStorageDir = do
-  d <- getXdgDirectory XdgData "rainbowhash"
-  createDirectoryIfMissing True d
-  pure d
+getDefaultStorageDir = getXdgDirectory XdgData "rainbowhash"
 
 getStorageDirFromCLI :: IO (Maybe FilePath)
 getStorageDirFromCLI = do
