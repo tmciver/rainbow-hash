@@ -19,16 +19,28 @@ import Network.HTTP.Types.Status (status201)
 import qualified RainbowHash as RH
 import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile)
 import RainbowHash.App (runAppIO)
-import RainbowHash.Env (Env(..), getEnv)
+import RainbowHash.Env (Env(..))
+import RainbowHash.Server.StorageDirectory (getStorageDir)
+import qualified Data.Text as T
+import System.Directory (createDirectoryIfMissing)
 
 main :: IO ()
 main = do
-  env <- getEnv
+  env@(Env dir') <- getEnv
+  createDirectoryIfMissing True dir'
+  showEnv env
   scotty 3000 $ do
     get "/" homeView
     get "/blobs" (showAllHashes env)
     get "/blob/:hash" $ param "hash" >>= getBlob env
     post "/blobs" (handleUpload env)
+
+getEnv :: IO Env
+getEnv = Env <$> getStorageDir
+
+showEnv :: Env -> IO ()
+showEnv (Env storageDir') =
+  putStrLn $ ("Using directory " :: Text) <> T.pack storageDir' <> " for blob storage."
 
 template :: Text -> H.Html -> H.Html
 template title' body' = H.docTypeHtml $ do

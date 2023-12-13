@@ -11,8 +11,6 @@ module RainbowHash.CLI
 import Protolude
 
 import System.FSNotify
-import Control.Concurrent (threadDelay)
-import Control.Monad (forever)
 import qualified Data.Text as T
 
 import RainbowHash.CLI.Config (Config)
@@ -50,7 +48,7 @@ watchDirectory fp = do
   config <- ask
   liftIO $ withManager $ \mgr -> do
     -- start a watching job (in the background)
-    watchDir
+    void $ watchDir
       mgr          -- manager
       fp           -- directory to watch
       isFileAdded  -- predicate
