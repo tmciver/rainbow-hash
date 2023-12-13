@@ -63,7 +63,7 @@ class Monad m => FileGet m where
   allFileIds :: m (Set FileId)
 
 -- This is a low-level class used for implementation.  If you want to put a file
--- in the store, use putFileByteString or putFileFromFilePath.
+-- in the store, use putFile.
 class Monad m => FilePut m v where
   putFileInternal :: FileId -> Metadata -> v -> m ()
 

@@ -16,8 +16,9 @@ import qualified Data.Text as T
 import RainbowHash.CLI.Config (Config)
 import RainbowHash.HttpClient (postFile, runHttpClient)
 
-newtype Command
+data Command
   = WatchDir FilePath
+  | UploadFile FilePath
 
 getCommand :: IO (Either Text Command)
 getCommand = do
@@ -27,6 +28,10 @@ getCommand = do
       [dir] -> Right $ WatchDir dir
       [] -> Left "You must supply a path to a directory for the 'watch' command."
       _ -> Left "Too many arguments for the 'watch' command."
+    "upload":rest -> case rest of
+      [file] -> Right $ UploadFile file
+      [] -> Left "You must supply a path to a file for the 'upload' command."
+      _ -> Left "Too many arguments for the 'upload' command."
     cmdStr:_ -> Left $ "Unrecognized command " <> T.pack cmdStr
     [] -> Left "You must supply a command."
 
@@ -37,6 +42,7 @@ runCommand
   => Command
   -> m ()
 runCommand (WatchDir dir) = watchDirectory dir
+runCommand (UploadFile file) = putFile file
 
 watchDirectory
   :: ( MonadReader Config m
@@ -60,6 +66,15 @@ watchDirectory fp = do
     where isFileAdded :: Event -> Bool
           isFileAdded Added{} = True
           isFileAdded _ = False
+
+putFile
+  :: ( MonadReader Config m
+     , MonadIO m
+     )
+  => FilePath
+  -> m ()
+putFile fp =
+  ask >>= liftIO . runHttpClient (postFile fp)
 
 uploadAction :: Config -> Action
 uploadAction config (Added fp _ False) = runHttpClient (postFile fp) config
