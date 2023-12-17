@@ -15,9 +15,11 @@ import qualified Data.Text as T
 import System.Directory (doesDirectoryExist, listDirectory, doesFileExist)
 
 import RainbowHash.CLI.Config (Config)
-import RainbowHash.HttpClient (postFile, runHttpClient)
+import RainbowHash.HttpClient (postFile, runHttpClient, HttpRead (..))
 
 import System.FilePath ((</>))
+import RainbowHash (calcHash)
+import qualified Data.ByteString as BS
 
 data Command
   = WatchDir FilePath
@@ -86,8 +88,20 @@ putFile
      )
   => FilePath
   -> m ()
-putFile fp =
-  ask >>= liftIO . runHttpClient (postFile fp)
+putFile fp = do
+  -- Calculate the hash of the file's content.
+  bs <- liftIO $ BS.readFile fp
+  let hash' = calcHash bs
+  config <- ask
+  liftIO $ runHttpClient
+    (do
+        -- Only upload the file if it doesn't exist on the server.
+        fileExists <- doesFileExistInStore hash'
+        if fileExists
+          then liftIO $ putStrLn ("File exists on server; not uploading." :: Text)
+          else postFile fp
+    )
+    config
 
 uploadAction :: Config -> Action
 uploadAction config (Added fp _ False) = runHttpClient (postFile fp) config

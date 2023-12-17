@@ -86,6 +86,7 @@ executables:
     - bytestring
     - data-default
     - directory
+    - exceptions
     - filepath
     - fsnotify
     - http-client

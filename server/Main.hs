@@ -23,6 +23,7 @@ import RainbowHash.Env (Env(..))
 import RainbowHash.Server.StorageDirectory (getStorageDir)
 import qualified Data.Text as T
 import System.Directory (createDirectoryIfMissing)
+import Network.HTTP.Types.Method (StdMethod(HEAD))
 
 main :: IO ()
 main = do
@@ -33,6 +34,7 @@ main = do
     get "/" homeView
     get "/blobs" (showAllHashes env)
     get "/blob/:hash" $ param "hash" >>= getBlob env
+    addroute HEAD "/blob/:hash" $ param "hash" >>= headBlob env
     post "/blobs" (handleUpload env)
 
 getEnv :: IO Env
@@ -93,6 +95,14 @@ getBlob env hash' = do
       raw strictData
     where notFound' :: ActionM ()
           notFound' = status status404
+
+headBlob :: Env -> Text -> ActionM ()
+headBlob env hash' = do
+  let fileId' = FileId hash'
+  fileExists' <- liftIO $ runAppIO (RH.fileExists fileId') env
+  unless fileExists' notFound'
+  where notFound' :: ActionM ()
+        notFound' = status status404
 
 showAllHashes :: Env -> ActionM ()
 showAllHashes env = do

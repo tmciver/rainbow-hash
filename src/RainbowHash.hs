@@ -7,6 +7,7 @@
 module RainbowHash
   ( putFile
   , putFileFromFilePath
+  , calcHash
   , Hash
   , File(..)
   , FileId(..)
