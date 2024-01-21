@@ -1,10 +1,15 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ ... }:
 
-pkgs.haskellPackages.developPackage {
-  root = ./.;
-  # modifier = drv:
-  #   pkgs.haskell.lib.addBuildTools drv (with pkgs.haskellPackages;
-  #     [ haskell-language-server
-  #       emacs
-  #     ]);
-}
+let
+  pkgs = import ./nixpkgs-pinned.nix;
+  project = (import ./release.nix {}).project1;
+  devDeps = [ pkgs.haskellPackages.haskell-language-server
+#              pkgs.haskellPackages.ghcid
+#              pkgs.haskellPackages.cabal-install
+              pkgs.emacs
+              pkgs.git
+            ];
+in
+pkgs.lib.overrideDerivation project.env (old:
+  { buildInputs = old.buildInputs ++ devDeps; }
+)

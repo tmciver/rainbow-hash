@@ -104,6 +104,6 @@ putFile fp = do
     config
 
 uploadAction :: Config -> Action
-uploadAction config (Added fp _ False) = runHttpClient (postFile fp) config
-uploadAction _ (Added _ _ True) = putStrLn ("Directory added. Ignoring" :: Text)
+uploadAction config (Added fp _ IsFile) = runHttpClient (postFile fp) config
+uploadAction _ (Added _ _ IsDirectory) = putStrLn ("Directory added. Ignoring" :: Text)
 uploadAction _ e = putStrLn $ ("Ignoring event: " :: Text) <> show e
