@@ -84,6 +84,7 @@ executables:
     - protolude
     - aeson
     - bytestring
+    - containers
     - data-default
     - directory
     - exceptions
@@ -93,6 +94,8 @@ executables:
     - http-types
     - lens
     - modern-uri
+    - monad-logger
+    - ordered-containers
     - text
     - wreq
     - yaml

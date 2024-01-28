@@ -4,27 +4,50 @@
 
 module RainbowHash.CLI
   ( Command(..)
+  , HttpRead(..)
+  , HttpWrite(..)
+  , FileSystemRead(..)
+  , DirectoryWatch(..)
+  , HttpError
   , getCommand
   , runCommand
   ) where
 
-import Protolude
+import Protolude hiding (readFile)
 
-import System.FSNotify
+import Data.Set.Ordered (OSet)
+import qualified Data.Set.Ordered as OSet
+import Control.Monad.Logger (MonadLogger, logInfoN)
 import qualified Data.Text as T
-import System.Directory (doesDirectoryExist, listDirectory, doesFileExist)
-
-import RainbowHash.CLI.Config (Config)
-import RainbowHash.HttpClient (postFile, runHttpClient, HttpRead (..))
-
+import System.Directory (doesDirectoryExist)
 import System.FilePath ((</>))
-import RainbowHash (calcHash)
-import qualified Data.ByteString as BS
+
+import RainbowHash (calcHash, Hash)
 
 data Command
   = WatchDir FilePath
   | UploadFile FilePath
   | UploadDir FilePath
+
+data HttpError = Noop
+  deriving (Eq, Show)
+
+class MonadError HttpError m => HttpWrite m where
+  postFile :: FilePath -> m ()
+
+class HttpRead m where
+  doesFileExistInStore :: Hash -> m Bool
+
+class Monad m => FileSystemRead m where
+  readFile :: FilePath -> m ByteString
+  listDirectory :: FilePath -> m (OSet FilePath)
+  doesFileExist :: FilePath -> m Bool
+
+class Monad m => DirectoryWatch m where
+  watchDirectory
+    :: FilePath -- ^Directory to watch
+    -> (FilePath -> m ()) -- ^Action to run. Is passed the full path to a file that was added.
+    -> m ()
 
 getCommand :: IO (Either Text Command)
 getCommand = do
@@ -46,64 +69,37 @@ getCommand = do
     [] -> pure . Left $ "You must supply a command."
 
 runCommand
-  :: ( MonadReader Config m
-     , MonadIO m
+  :: ( FileSystemRead m
+     , DirectoryWatch m
+     , HttpRead m
+     , HttpWrite m
+     , MonadLogger m
      )
   => Command
   -> m ()
-runCommand (WatchDir dir) = watchDirectory dir
+runCommand (WatchDir dir) = watchDirectory dir putFile
 runCommand (UploadFile file) = putFile file
 runCommand (UploadDir dir) = do
-  files <- liftIO $ listDirectory dir
-    <&> fmap (dir </>)
+  files <- listDirectory dir
+    <&> (fmap (dir </>) . OSet.toAscList)
     >>= filterM doesFileExist
   traverse_ putFile files
 
-watchDirectory
-  :: ( MonadReader Config m
-     , MonadIO m
-     )
-  => FilePath
-  -> m ()
-watchDirectory fp = do
-  config <- ask
-  liftIO $ withManager $ \mgr -> do
-    -- start a watching job (in the background)
-    void $ watchDir
-      mgr          -- manager
-      fp           -- directory to watch
-      isFileAdded  -- predicate
-      (uploadAction config) -- action
-
-    -- sleep forever (until interrupted)
-    forever $ threadDelay 1000000
-
-    where isFileAdded :: Event -> Bool
-          isFileAdded Added{} = True
-          isFileAdded _ = False
-
 putFile
-  :: ( MonadReader Config m
-     , MonadIO m
+  :: ( FileSystemRead m
+     , HttpRead m
+     , HttpWrite m
+     , MonadLogger m
      )
   => FilePath
   -> m ()
 putFile fp = do
   -- Calculate the hash of the file's content.
-  bs <- liftIO $ BS.readFile fp
+  bs <- readFile fp
   let hash' = calcHash bs
-  config <- ask
-  liftIO $ runHttpClient
-    (do
-        -- Only upload the file if it doesn't exist on the server.
-        fileExists <- doesFileExistInStore hash'
-        if fileExists
-          then liftIO $ putStrLn ("File exists on server; not uploading." :: Text)
-          else postFile fp
-    )
-    config
 
-uploadAction :: Config -> Action
-uploadAction config (Added fp _ IsFile) = runHttpClient (postFile fp) config
-uploadAction _ (Added _ _ IsDirectory) = putStrLn ("Directory added. Ignoring" :: Text)
-uploadAction _ e = putStrLn $ ("Ignoring event: " :: Text) <> show e
+  -- Only upload the file if it doesn't exist on the server.
+  fileExists <- doesFileExistInStore hash'
+  if fileExists
+    then logInfoN ("File exists on server; not uploading." :: Text)
+    else postFile fp
