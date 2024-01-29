@@ -23,10 +23,11 @@ import Control.Lens (set, (.~))
 import Control.Monad.Catch (MonadThrow)
 import qualified System.Directory as Dir
 import System.FSNotify (Event(..), Action, EventIsDirectory(..), withManager, watchDir)
+import System.FilePath ((</>), takeFileName)
 
 import RainbowHash.CLI.Config (Config(..))
 import RainbowHash (Hash)
-import RainbowHash.CLI (HttpRead(..), HttpWrite(..), FileSystemRead (..), DirectoryWatch(..), HttpError)
+import RainbowHash.CLI (HttpRead(..), HttpWrite(..), FileSystemRead (..), FileSystemWrite (..), DirectoryWatch(..), HttpError(..))
 import qualified Data.ByteString as BS
 
 newtype App a = App { unApp :: ExceptT HttpError (ReaderT Config IO) a }
@@ -37,15 +38,20 @@ instance HttpWrite App where
     url <- (<> "/blobs") . renderStr <$> asks serverUri
     logInfoN $ "Uploading file at " <> T.pack fp <> " to " <> T.pack url
     let part = partFile "" fp
-    let opts = defaults & set checkResponse (Just $ \_ _ -> pure ()) -- I'm not sure if this is working: still get an exception if server is not up.
+        opts = defaults & set checkResponse (Just $ \_ _ -> pure ()) -- I'm not sure if this is working: still get an exception if server is not up.
                         & manager .~ Left defaultManagerSettings { managerResponseTimeout = responseTimeoutMicro 3000000 }
     eitherRes <- liftIO $ try $ postWith opts url part
     case eitherRes of
-      Left (SomeException e) -> logErrorN $ "Got error: " <> T.pack (displayException e)
+      Left (SomeException e) -> do
+        let errMsg = T.pack (displayException e)
+        logErrorN $ "Received error from server: " <> errMsg
+        throwError $ PostError errMsg
       Right res ->
         if statusIsSuccessful . responseStatus $ res
           then logInfoN ("Success uploading file." :: Text)
-          else logErrorN ("Error uploading file." :: Text)
+          else do
+            logErrorN ("Error uploading file." :: Text)
+            throwError $ PostError "Non-success HTTP status returned"
 
 hashToUrl
   :: ( MonadThrow m
@@ -72,6 +78,13 @@ instance FileSystemRead App where
   readFile = liftIO . BS.readFile
   listDirectory = (OSet.fromList <$>) . liftIO . Dir.listDirectory
   doesFileExist = liftIO . Dir.doesFileExist
+
+instance FileSystemWrite App where
+  createDirectory = liftIO . Dir.createDirectory
+  moveToDirectory fp dir = do
+    let dest = dir </> takeFileName fp
+    putStrLn $ "Moving " <> T.pack fp <> " to " <> T.pack dir
+    liftIO $ Dir.renameFile fp dest
 
 instance DirectoryWatch App where
   watchDirectory dir action = do

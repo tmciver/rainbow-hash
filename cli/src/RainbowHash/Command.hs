@@ -15,7 +15,7 @@ import qualified Data.Text as T
 import System.Directory (doesDirectoryExist)
 import System.FilePath ((</>))
 
-import RainbowHash.CLI (FileSystemRead(..), DirectoryWatch(..), HttpRead(..), HttpWrite(..), putFile)
+import RainbowHash.CLI (FileSystemRead(..), DirectoryWatch(..), HttpRead(..), HttpWrite(..), putFile, FileSystemWrite, watchDirectoryMoveOnError)
 
 data Command
   = WatchDir FilePath
@@ -43,6 +43,7 @@ getCommand = do
 
 runCommand
   :: ( FileSystemRead m
+     , FileSystemWrite m
      , DirectoryWatch m
      , HttpRead m
      , HttpWrite m
@@ -50,7 +51,7 @@ runCommand
      )
   => Command
   -> m ()
-runCommand (WatchDir dir) = watchDirectory dir putFile
+runCommand (WatchDir dir) = watchDirectoryMoveOnError dir
 runCommand (UploadFile file) = putFile file
 runCommand (UploadDir dir) = do
   files <- listDirectory dir
