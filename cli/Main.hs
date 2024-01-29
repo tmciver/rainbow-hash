@@ -5,7 +5,7 @@ module Main where
 
 import Protolude
 
-import RainbowHash.CLI ( getCommand, runCommand)
+import RainbowHash.Command ( getCommand, runCommand)
 import RainbowHash.CLI.Config (getConfig)
 import RainbowHash.App (runApp)
 
