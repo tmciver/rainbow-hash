@@ -3,11 +3,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module RainbowHash.HttpClient
-  ( HttpWrite(..)
-  , HttpClient
-  , runHttpClient
-  , HttpRead(..)
+module RainbowHash.App
+  ( App
+  , runApp
   ) where
 
 import Protolude
@@ -31,10 +29,10 @@ import RainbowHash (Hash)
 import RainbowHash.CLI (HttpRead(..), HttpWrite(..), FileSystemRead (..), DirectoryWatch(..), HttpError)
 import qualified Data.ByteString as BS
 
-newtype HttpClient a = HttpClient { unHttpClient :: ExceptT HttpError (ReaderT Config IO) a }
+newtype App a = App { unApp :: ExceptT HttpError (ReaderT Config IO) a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Config, MonadThrow, MonadError HttpError)
 
-instance HttpWrite HttpClient where
+instance HttpWrite App where
   postFile fp = do
     url <- (<> "/blobs") . renderStr <$> asks serverUri
     logInfoN $ "Uploading file at " <> T.pack fp <> " to " <> T.pack url
@@ -59,7 +57,7 @@ hashToUrl h = do
   host <- asks serverUri
   mkURI $ render host <> "/blob/" <> h
 
-instance HttpRead HttpClient where
+instance HttpRead App where
   doesFileExistInStore h = do
     fileUrl <- hashToUrl h
     logInfoN $ render fileUrl
@@ -70,12 +68,12 @@ instance HttpRead HttpClient where
       Left (SomeException _) -> False
       Right res -> statusIsSuccessful . responseStatus $ res
 
-instance FileSystemRead HttpClient where
+instance FileSystemRead App where
   readFile = liftIO . BS.readFile
   listDirectory = (OSet.fromList <$>) . liftIO . Dir.listDirectory
   doesFileExist = liftIO . Dir.doesFileExist
 
-instance DirectoryWatch HttpClient where
+instance DirectoryWatch App where
   watchDirectory dir action = do
     config <- ask
     liftIO $ withManager $ \mgr -> do
@@ -95,15 +93,15 @@ instance DirectoryWatch HttpClient where
 
               uploadAction :: Config -> Action
               uploadAction config (Added fp _ IsFile) = do
-                e <- runHttpClient (action fp) config
+                e <- runApp (action fp) config
                 case e of
                   Left err -> putStrLn $ ("There was an error" :: Text) <> show err
                   _ -> pure ()
               uploadAction _ (Added _ _ IsDirectory) = putStrLn ("Directory added. Ignoring" :: Text)
               uploadAction _ e = putStrLn $ ("Ignoring event: " :: Text) <> show e
 
-instance MonadLogger HttpClient where
+instance MonadLogger App where
   monadLoggerLog _ _ _ msg = liftIO $ putStrLn (T.decodeUtf8 . fromLogStr . toLogStr $ msg)
 
-runHttpClient :: HttpClient a -> Config -> IO (Either HttpError a)
-runHttpClient = runReaderT . runExceptT . unHttpClient
+runApp :: App a -> Config -> IO (Either HttpError a)
+runApp = runReaderT . runExceptT . unApp

@@ -7,9 +7,9 @@ import Protolude
 
 import RainbowHash.CLI ( getCommand, runCommand)
 import RainbowHash.CLI.Config (getConfig)
-import RainbowHash.HttpClient (runHttpClient)
+import RainbowHash.App (runApp)
 
 main :: IO ()
 main = do
   config <- getConfig
-  getCommand >>= either putStrLn (\cmd -> void $ runHttpClient (runCommand cmd) config)
+  getCommand >>= either putStrLn (\cmd -> void $ runApp (runCommand cmd) config)

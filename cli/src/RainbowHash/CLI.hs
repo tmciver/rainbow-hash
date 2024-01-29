@@ -46,7 +46,7 @@ class Monad m => FileSystemRead m where
 class Monad m => DirectoryWatch m where
   watchDirectory
     :: FilePath -- ^Directory to watch
-    -> (FilePath -> m ()) -- ^Action to run. Is passed the full path to a file that was added.
+    -> (FilePath -> m ()) -- ^Action to run. It's passed the full path to a file that was added.
     -> m ()
 
 getCommand :: IO (Either Text Command)
