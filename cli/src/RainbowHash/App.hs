@@ -86,8 +86,10 @@ instance FileSystemWrite App where
     logInfoN $ "Moving " <> T.pack fp <> " to " <> T.pack dir
     liftIO $ Dir.renameFile fp dest
   deleteFile fp = do
-    logInfoN $ "Deleting file " <> T.pack fp
-    liftIO $ Dir.removeFile fp
+    shouldDeleteFile <- asks deleteUploadedFile
+    when shouldDeleteFile $ do
+      logInfoN $ "Deleting file " <> T.pack fp
+      liftIO $ Dir.removeFile fp
 
 instance DirectoryWatch App where
   watchDirectory dir action = do

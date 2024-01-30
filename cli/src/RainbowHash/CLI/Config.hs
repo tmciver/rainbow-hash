@@ -17,12 +17,13 @@ import System.FilePath ((</>), takeDirectory)
 import qualified Data.Yaml as YAML
 import Data.Default
 
-newtype Config = Config
+data Config = Config
   { serverUri :: URI
+  , deleteUploadedFile :: Bool
   }
 
 instance ToJSON Config where
-  toJSON (Config uri) =
+  toJSON (Config uri delete) =
     let authority = either (panic "Could not get host from config") identity . uriAuthority $ uri
         host = unRText . authHost $ authority
         port = fromJust . authPort $ authority
@@ -31,6 +32,7 @@ instance ToJSON Config where
          [ "host" .= host
          , "port" .= port
          ]
+       , "delete-uploaded-file" .= delete
        ]
 
 getURI :: Text -> Natural -> URI
@@ -42,14 +44,17 @@ instance FromJSON Config where
     server <- o .: "server"
     host <- server .: "host"
     port <- server .: "port"
-    pure . Config $ getURI host port
+    delete <- o .: "delete-uploaded-file"
+    let uri = getURI host port
+    pure $ Config uri delete
 
 instance Default Config where
   def = let host = "localhost"
             port :: Natural
             port = 3000
+            delete = False
         in case mkURI ("http://" <> host <> ":" <> show port) of
-             Just uri -> Config uri
+             Just uri -> Config uri delete
              Nothing -> panic "Could not create a URI to the server."
 
 getConfigFile :: IO FilePath
