@@ -42,6 +42,7 @@ class Monad m => FileSystemWrite m where
     :: FilePath -- ^Path of file to move
     -> FilePath -- ^Directory to move it to
     -> m ()
+  deleteFile :: FilePath -> m ()
 
 class Monad m => DirectoryWatch m where
   watchDirectory
@@ -82,7 +83,7 @@ putFile fp = do
   fileExists <- doesFileExistInStore hash'
   if fileExists
     then logInfoN ("File exists on server; not uploading." :: Text)
-    else postFile fp
+    else postFile fp >> deleteFile fp
 
 putFileMoveOnError
   :: ( FileSystemRead m

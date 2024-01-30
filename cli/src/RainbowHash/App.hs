@@ -83,8 +83,11 @@ instance FileSystemWrite App where
   createDirectory = liftIO . Dir.createDirectory
   moveToDirectory fp dir = do
     let dest = dir </> takeFileName fp
-    putStrLn $ "Moving " <> T.pack fp <> " to " <> T.pack dir
+    logInfoN $ "Moving " <> T.pack fp <> " to " <> T.pack dir
     liftIO $ Dir.renameFile fp dest
+  deleteFile fp = do
+    logInfoN $ "Deleting file " <> T.pack fp
+    liftIO $ Dir.removeFile fp
 
 instance DirectoryWatch App where
   watchDirectory dir action = do
