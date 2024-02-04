@@ -1,60 +1,91 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module RainbowHash.Command
   ( Command(..)
-  , getCommand
   , runCommand
+  , options
   ) where
 
 import Protolude
 
-import Control.Monad.Logger (MonadLogger)
-import qualified Data.Set.Ordered as OSet
-import qualified Data.Text as T
-import System.Directory (doesDirectoryExist)
-import System.FilePath ((</>))
+import Options.Applicative (Parser, metavar, strArgument, long, short, help, subparser, command, info, progDesc, ParserInfo, fullDesc, header, flag')
 
-import RainbowHash.CLI (FileSystemRead(..), DirectoryWatch(..), HttpRead(..), HttpWrite(..), putFile, FileSystemWrite, watchDirectoryMoveOnError)
+import RainbowHash.CLI (putFile, watchDirectoryMoveOnError, uploadDirectory)
+import RainbowHash.CLI.Config (Config (deleteAction), fromBool)
+import RainbowHash.App (runApp)
+import System.Directory (doesDirectoryExist)
 
 data Command
-  = WatchDir FilePath
-  | UploadFile FilePath
-  | UploadDir FilePath
+  = WatchDir WatchDirOptions
+  -- merge the following since the option parser cannot determine which of the
+  -- two the user intended without checking if the path is a file or directory
+  -- during parsing which cannot be done since option parsing is pure.
+  | Upload UploadOptions
+  deriving (Show)
 
-getCommand :: IO (Either Text Command)
-getCommand = do
-  args <- getArgs
-  case args of
-    "watch":rest -> pure $ case rest of
-      [dir] -> Right $ WatchDir dir
-      [] -> Left "You must supply a path to a directory for the 'watch' command."
-      _ -> Left "Too many arguments for the 'watch' command."
-    "upload":rest -> case rest of
-      [fileOrDirectory] -> do
-        isDir <- doesDirectoryExist fileOrDirectory
-        pure . Right $ if isDir
-          then UploadDir fileOrDirectory
-          else UploadFile fileOrDirectory
-      [] -> pure . Left $ "You must supply a path to a file for the 'upload' command."
-      _ -> pure . Left $ "Too many arguments for the 'upload' command."
-    cmdStr:_ -> pure . Left $ "Unrecognized command " <> T.pack cmdStr
-    [] -> pure . Left $ "You must supply a command."
+data WatchDirOptions = WatchDirOptions
+  { dirToWatch :: FilePath
+  , wdoDeleteAfterUpload :: Maybe Bool
+  } deriving (Show)
+
+data UploadOptions = UploadOptions
+  { fileOrDirectory :: FilePath
+  , uoDeleteAfterUpload :: Maybe Bool
+  } deriving (Show)
+
+deleteAfterFlag :: Parser Bool
+deleteAfterFlag = flag' True (long "delete-after-upload" <> short 'd' <> help "Whether to delete the uploaded file")
+
+keepFlag :: Parser Bool
+keepFlag = flag' True (long "keep-after-upload" <> short 'k' <> help "Don not delete a file after upload")
+
+deleteParser :: Parser (Maybe Bool)
+deleteParser = optional $ deleteAfterFlag <|> keepFlag
+
+watchCommand :: Parser Command
+watchCommand = WatchDir <$>
+  ( WatchDirOptions
+    <$> strArgument (metavar "DIR" <> help "The directory to watch")
+    <*> deleteParser)
+
+uploadCommand :: Parser Command
+uploadCommand = Upload <$>
+  ( UploadOptions
+    <$> strArgument (metavar "FILE-OR-DIR" <> help "The file or directory to upload")
+    <*> deleteParser)
+
+commandParser :: Parser Command
+commandParser = subparser
+  ( command "watch" (info watchCommand (progDesc "Watch a given directory and upload files that are added to it. Does not upload existing files."))
+ <> command "upload" (info uploadCommand (progDesc "Upload the given file or the files in the given directory."))
+  )
+
+options :: ParserInfo Command
+options = info commandParser
+  ( fullDesc
+ <> progDesc "A command-line interface for a rainbow-hash server."
+ <> header "A header for the CLI for rainbow-hash."
+  )
 
 runCommand
-  :: ( FileSystemRead m
-     , FileSystemWrite m
-     , DirectoryWatch m
-     , HttpRead m
-     , HttpWrite m
-     , MonadLogger m
-     )
-  => Command
-  -> m ()
-runCommand (WatchDir dir) = watchDirectoryMoveOnError dir
-runCommand (UploadFile file) = putFile file
-runCommand (UploadDir dir) = do
-  files <- listDirectory dir
-    <&> (fmap (dir </>) . OSet.toAscList)
-    >>= filterM doesFileExist
-  traverse_ putFile files
+  :: Config
+  -> Command
+  -> IO ()
+runCommand config cmd = do
+  eitherRes <- case cmd of
+        WatchDir (WatchDirOptions dir shouldDelete) -> do
+          let config' = config { deleteAction = maybe (deleteAction config) fromBool shouldDelete }
+          runApp (watchDirectoryMoveOnError dir) config'
+          
+        Upload (UploadOptions fileOrDirectory' shouldDelete) -> do
+          isDir <- doesDirectoryExist fileOrDirectory'
+          let config' = config { deleteAction = maybe (deleteAction config) fromBool shouldDelete }
+              app = if isDir
+                then uploadDirectory fileOrDirectory'
+                else putFile fileOrDirectory'
+          runApp app config'
+
+  either print pure eitherRes

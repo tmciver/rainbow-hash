@@ -33,6 +33,9 @@ import qualified Data.ByteString as BS
 newtype App a = App { unApp :: ExceptT HttpError (ReaderT Config IO) a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Config, MonadThrow, MonadError HttpError)
 
+runApp :: App a -> Config -> IO (Either HttpError a)
+runApp = runReaderT . runExceptT . unApp
+
 instance HttpWrite App where
   postFile fp = do
     url <- (<> "/blobs") . renderStr <$> asks serverUri
@@ -80,16 +83,14 @@ instance FileSystemRead App where
   doesFileExist = liftIO . Dir.doesFileExist
 
 instance FileSystemWrite App where
-  createDirectory = liftIO . Dir.createDirectory
+  createDirectory = liftIO . Dir.createDirectoryIfMissing True
   moveToDirectory fp dir = do
     let dest = dir </> takeFileName fp
     logInfoN $ "Moving " <> T.pack fp <> " to " <> T.pack dir
     liftIO $ Dir.renameFile fp dest
   deleteFile fp = do
-    shouldDeleteFile <- asks deleteUploadedFile
-    when shouldDeleteFile $ do
-      logInfoN $ "Deleting file " <> T.pack fp
-      liftIO $ Dir.removeFile fp
+    logInfoN $ "Deleting file " <> T.pack fp
+    liftIO $ Dir.removeFile fp
 
 instance DirectoryWatch App where
   watchDirectory dir action = do
@@ -120,6 +121,3 @@ instance DirectoryWatch App where
 
 instance MonadLogger App where
   monadLoggerLog _ _ _ msg = liftIO $ putStrLn (T.decodeUtf8 . fromLogStr . toLogStr $ msg)
-
-runApp :: App a -> Config -> IO (Either HttpError a)
-runApp = runReaderT . runExceptT . unApp

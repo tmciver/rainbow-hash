@@ -5,11 +5,13 @@ module Main where
 
 import Protolude
 
-import RainbowHash.Command ( getCommand, runCommand)
+import Options.Applicative (execParser)
+
+import RainbowHash.Command (runCommand, options)
 import RainbowHash.CLI.Config (getConfig)
-import RainbowHash.App (runApp)
 
 main :: IO ()
 main = do
   config <- getConfig
-  getCommand >>= either putStrLn (\cmd -> void $ runApp (runCommand cmd) config)
+  cmd <- execParser options
+  runCommand config cmd

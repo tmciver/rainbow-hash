@@ -3,6 +3,8 @@
 
 module RainbowHash.CLI.Config
   ( Config(..)
+  , DeleteAction(..)
+  , fromBool
   , getConfig
   ) where
 
@@ -17,9 +19,21 @@ import System.FilePath ((</>), takeDirectory)
 import qualified Data.Yaml as YAML
 import Data.Default
 
+data DeleteAction
+  = Delete
+  | NoDelete
+
+fromBool :: Bool -> DeleteAction
+fromBool True = Delete
+fromBool False = NoDelete
+
+toBool :: DeleteAction -> Bool
+toBool Delete = True
+toBool NoDelete = False
+
 data Config = Config
   { serverUri :: URI
-  , deleteUploadedFile :: Bool
+  , deleteAction :: DeleteAction
   }
 
 instance ToJSON Config where
@@ -32,12 +46,8 @@ instance ToJSON Config where
          [ "host" .= host
          , "port" .= port
          ]
-       , "delete-uploaded-file" .= delete
+       , "delete-uploaded-file" .= toBool delete
        ]
-
-getURI :: Text -> Natural -> URI
-getURI host port =
-  fromJust $ mkURI ("http://" <> host <> ":" <> show port)
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \o -> do
@@ -46,16 +56,20 @@ instance FromJSON Config where
     port <- server .: "port"
     delete <- o .: "delete-uploaded-file"
     let uri = getURI host port
-    pure $ Config uri delete
+    pure $ Config uri (fromBool delete)
 
 instance Default Config where
   def = let host = "localhost"
             port :: Natural
             port = 3000
-            delete = False
+            deleteAction' = NoDelete
         in case mkURI ("http://" <> host <> ":" <> show port) of
-             Just uri -> Config uri delete
+             Just uri -> Config uri deleteAction'
              Nothing -> panic "Could not create a URI to the server."
+
+getURI :: Text -> Natural -> URI
+getURI host port =
+  fromJust $ mkURI ("http://" <> host <> ":" <> show port)
 
 getConfigFile :: IO FilePath
 getConfigFile = (</> "cli" </> "config.yaml") <$> D.getXdgDirectory D.XdgConfig "rainbowhash"

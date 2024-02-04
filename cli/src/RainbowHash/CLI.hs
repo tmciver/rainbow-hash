@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 
 module RainbowHash.CLI
   ( HttpRead(..)
@@ -12,15 +14,18 @@ module RainbowHash.CLI
   , putFile
   , putFileMoveOnError
   , watchDirectoryMoveOnError
+  , uploadDirectory
   ) where
 
 import Protolude hiding (readFile)
 
 import Data.Set.Ordered (OSet)
+import qualified Data.Set.Ordered as OSet
 import Control.Monad.Logger (MonadLogger, logInfoN)
 
 import RainbowHash (calcHash, Hash)
 import System.FilePath ((</>))
+import RainbowHash.CLI.Config (DeleteAction(..))
 
 newtype HttpError = PostError Text
   deriving (Eq, Show)
@@ -56,6 +61,8 @@ watchDirectoryMoveOnError
      , FileSystemWrite m
      , HttpRead m
      , HttpWrite m
+     , HasField "deleteAction" env DeleteAction
+     , MonadReader env m
      , MonadLogger m
      )
   => FilePath -- ^Directory to watch
@@ -70,9 +77,11 @@ putFile
      , FileSystemWrite m
      , HttpRead m
      , HttpWrite m
+     , HasField "deleteAction" env DeleteAction
+     , MonadReader env m
      , MonadLogger m
      )
-  => FilePath
+  => FilePath -- ^the file to upload
   -> m ()
 putFile fp = do
   -- Calculate the hash of the file's content.
@@ -83,13 +92,20 @@ putFile fp = do
   fileExists <- doesFileExistInStore hash'
   if fileExists
     then logInfoN ("File exists on server; not uploading." :: Text)
-    else postFile fp >> deleteFile fp
+    else do
+      deleteAction <- asks (getField @"deleteAction")
+      postFile fp
+      case deleteAction of
+        Delete -> deleteFile fp
+        NoDelete -> pure ()
 
 putFileMoveOnError
   :: ( FileSystemRead m
      , FileSystemWrite m
      , HttpRead m
      , HttpWrite m
+     , HasField "deleteAction" env DeleteAction
+     , MonadReader env m
      , MonadLogger m
      )
   => FilePath -- ^Directory to move file to on error
@@ -97,3 +113,20 @@ putFileMoveOnError
   -> m ()
 putFileMoveOnError errorDir fp = do
   putFile fp `catchError` (\(PostError _) -> moveToDirectory fp errorDir)
+
+uploadDirectory
+  :: ( FileSystemRead m
+     , FileSystemWrite m
+     , HttpRead m
+     , HttpWrite m
+     , HasField "deleteAction" env DeleteAction
+     , MonadReader env m
+     , MonadLogger m
+     )
+  => FilePath -- ^the directory whose contents will be uploaded.
+  -> m ()
+uploadDirectory dir =
+  listDirectory dir
+    <&> (fmap (dir </>) . OSet.toAscList)
+    >>= filterM doesFileExist
+    >>= traverse_ putFile
