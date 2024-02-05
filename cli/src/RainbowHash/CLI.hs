@@ -92,12 +92,13 @@ putFile fp = do
   fileExists <- doesFileExistInStore hash'
   if fileExists
     then logInfoN ("File exists on server; not uploading." :: Text)
-    else do
-      deleteAction <- asks (getField @"deleteAction")
-      postFile fp
-      case deleteAction of
-        Delete -> deleteFile fp
-        NoDelete -> pure ()
+    else postFile fp
+
+  -- Delete the local file if configured.
+  deleteAction <- asks (getField @"deleteAction")
+  case deleteAction of
+    Delete -> deleteFile fp
+    NoDelete -> pure ()
 
 putFileMoveOnError
   :: ( FileSystemRead m
