@@ -13,7 +13,7 @@ import Protolude
 
 import Options.Applicative (Parser, metavar, strArgument, long, short, help, subparser, command, info, progDesc, ParserInfo, fullDesc, header, flag')
 
-import RainbowHash.CLI (putFile, watchDirectoryMoveOnError, uploadDirectory)
+import RainbowHash.CLI (putFileMoveOnError, watchDirectoryMoveOnError, uploadDirectoryMoveOnError)
 import RainbowHash.CLI.Config (Config (deleteAction), fromBool)
 import RainbowHash.App (runApp)
 import System.Directory (doesDirectoryExist)
@@ -84,8 +84,8 @@ runCommand config cmd = do
           isDir <- doesDirectoryExist fileOrDirectory'
           let config' = config { deleteAction = maybe (deleteAction config) fromBool shouldDelete }
               app = if isDir
-                then uploadDirectory fileOrDirectory'
-                else putFile fileOrDirectory'
+                then uploadDirectoryMoveOnError fileOrDirectory'
+                else putFileMoveOnError fileOrDirectory'
           runApp app config'
 
   either print pure eitherRes

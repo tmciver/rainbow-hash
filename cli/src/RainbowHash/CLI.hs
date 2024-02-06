@@ -14,7 +14,7 @@ module RainbowHash.CLI
   , putFile
   , putFileMoveOnError
   , watchDirectoryMoveOnError
-  , uploadDirectory
+  , uploadDirectoryMoveOnError
   ) where
 
 import Protolude hiding (readFile)
@@ -24,7 +24,7 @@ import qualified Data.Set.Ordered as OSet
 import Control.Monad.Logger (MonadLogger, logInfoN)
 
 import RainbowHash (calcHash, Hash)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 import RainbowHash.CLI.Config (DeleteAction(..))
 
 newtype HttpError = PostError Text
@@ -67,10 +67,8 @@ watchDirectoryMoveOnError
      )
   => FilePath -- ^Directory to watch
   -> m ()
-watchDirectoryMoveOnError dir = do
-  let errorDir = dir </> "upload-errors"
-  createDirectory errorDir
-  watchDirectory dir (putFileMoveOnError errorDir)
+watchDirectoryMoveOnError dir =
+  watchDirectory dir putFileMoveOnError
 
 putFile
   :: ( FileSystemRead m
@@ -109,13 +107,17 @@ putFileMoveOnError
      , MonadReader env m
      , MonadLogger m
      )
-  => FilePath -- ^Directory to move file to on error
-  -> FilePath -- ^Path to file to upload
+  => --FilePath -- ^Directory to move file to on error ->
+  FilePath -- ^Path to file to upload
   -> m ()
-putFileMoveOnError errorDir fp = do
-  putFile fp `catchError` (\(PostError _) -> moveToDirectory fp errorDir)
+putFileMoveOnError fp = do
+  let dir = takeDirectory fp
+      errorDir = dir </> "upload-errors"
+  putFile fp `catchError` (\(PostError _) -> do
+                              createDirectory errorDir
+                              moveToDirectory fp errorDir)
 
-uploadDirectory
+uploadDirectoryMoveOnError
   :: ( FileSystemRead m
      , FileSystemWrite m
      , HttpRead m
@@ -126,8 +128,8 @@ uploadDirectory
      )
   => FilePath -- ^the directory whose contents will be uploaded.
   -> m ()
-uploadDirectory dir =
+uploadDirectoryMoveOnError dir = do
   listDirectory dir
     <&> (fmap (dir </>) . OSet.toAscList)
     >>= filterM doesFileExist
-    >>= traverse_ putFile
+    >>= traverse_ putFileMoveOnError
