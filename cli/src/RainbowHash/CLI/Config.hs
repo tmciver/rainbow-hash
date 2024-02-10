@@ -18,6 +18,9 @@ import qualified System.Directory as D
 import System.FilePath ((</>), takeDirectory)
 import qualified Data.Yaml as YAML
 import Data.Default
+import qualified Data.Text as T
+import Control.Monad.Logger (LogLevel(LevelInfo))
+import RainbowHash.Logger (writeLog)
 
 data DeleteAction
   = Delete
@@ -80,17 +83,20 @@ getConfig = do
   case maybeConfig of
     Just config -> pure config
     Nothing -> do
+      writeLog LevelInfo "Unable to read configuration."
       writeConfigToFile def
       pure def
 
 writeConfigToFile :: Config -> IO ()
 writeConfigToFile config = do
   configFile <- getConfigFile
+  writeLog LevelInfo $ "Writing config to file " <> T.pack configFile
   YAML.encodeFile configFile config
 
 getConfigFromFile :: IO (Maybe Config)
 getConfigFromFile = do
   configFile <- getConfigFile
+  writeLog LevelInfo $ "Looking for configuration in file " <> T.pack configFile
   let configDir = takeDirectory configFile
   D.createDirectoryIfMissing True configDir
   eitherConfig <- YAML.decodeFileEither configFile

@@ -24,11 +24,12 @@ import Control.Monad.Catch (MonadThrow)
 import qualified System.Directory as Dir
 import System.FSNotify (Event(..), Action, EventIsDirectory(..), withManager, watchDir)
 import System.FilePath ((</>), takeFileName)
+import qualified Data.ByteString as BS
 
 import RainbowHash.CLI.Config (Config(..))
 import RainbowHash (Hash)
 import RainbowHash.CLI (HttpRead(..), HttpWrite(..), FileSystemRead (..), FileSystemWrite (..), DirectoryWatch(..), HttpError(..))
-import qualified Data.ByteString as BS
+import RainbowHash.Logger (writeLog)
 
 newtype App a = App { unApp :: ExceptT HttpError (ReaderT Config IO) a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Config, MonadThrow, MonadError HttpError)
@@ -120,4 +121,4 @@ instance DirectoryWatch App where
               uploadAction _ e = putStrLn $ ("Ignoring event: " :: Text) <> show e
 
 instance MonadLogger App where
-  monadLoggerLog _ _ _ msg = liftIO $ putStrLn (T.decodeUtf8 . fromLogStr . toLogStr $ msg)
+  monadLoggerLog _ _ level msg = liftIO $ writeLog level (T.decodeUtf8 . fromLogStr . toLogStr $ msg)
