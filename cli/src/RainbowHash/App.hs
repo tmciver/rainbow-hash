@@ -70,7 +70,7 @@ hashToUrl h = do
 instance HttpRead App where
   doesFileExistInStore h = do
     fileUrl <- hashToUrl h
-    logInfoN $ render fileUrl
+    logInfoN $ "Checking if file exists on server: " <> render fileUrl
     let opts = defaults & set checkResponse (Just $ \_ _ -> pure ()) -- I'm not sure if this is working: still get an exception if server is not up.
                         & manager .~ Left defaultManagerSettings { managerResponseTimeout = responseTimeoutMicro 3000000 }
     eitherRes <- liftIO $ try $ headWith opts (T.unpack . render $ fileUrl)

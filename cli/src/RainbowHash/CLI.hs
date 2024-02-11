@@ -26,6 +26,7 @@ import Control.Monad.Logger (MonadLogger, logInfoN)
 import RainbowHash (calcHash, Hash)
 import System.FilePath ((</>), takeDirectory)
 import RainbowHash.CLI.Config (DeleteAction(..))
+import qualified Data.Text as T
 
 newtype HttpError = PostError Text
   deriving (Eq, Show)
@@ -62,6 +63,7 @@ watchDirectoryMoveOnError
      , HttpRead m
      , HttpWrite m
      , HasField "deleteAction" env DeleteAction
+     , HasField "extensionsToIgnore" env (Set Text)
      , MonadReader env m
      , MonadLogger m
      )
@@ -70,33 +72,52 @@ watchDirectoryMoveOnError
 watchDirectoryMoveOnError dir =
   watchDirectory dir putFileMoveOnError
 
+shouldBeIgnored
+  :: ( HasField "extensionsToIgnore" env (Set Text)
+     , MonadReader env m
+     )
+  => FilePath
+  -> m Bool
+shouldBeIgnored fp = do
+  exts <- asks (getField @"extensionsToIgnore")
+  pure $ any (`T.isSuffixOf` T.pack fp) exts
+
 putFile
   :: ( FileSystemRead m
      , FileSystemWrite m
      , HttpRead m
      , HttpWrite m
      , HasField "deleteAction" env DeleteAction
+     , HasField "extensionsToIgnore" env (Set Text)
      , MonadReader env m
      , MonadLogger m
      )
   => FilePath -- ^the file to upload
   -> m ()
 putFile fp = do
-  -- Calculate the hash of the file's content.
-  bs <- readFile fp
-  let hash' = calcHash bs
+  logInfoN ""
+  logInfoN $ "Attempting to Upload file " <> T.pack fp
 
-  -- Only upload the file if it doesn't exist on the server.
-  fileExists <- doesFileExistInStore hash'
-  if fileExists
-    then logInfoN ("File exists on server; not uploading." :: Text)
-    else postFile fp
+  -- Check if this file should be ignored.
+  shouldBeIgnored' <- shouldBeIgnored fp
+  if shouldBeIgnored'
+    then logInfoN $ "Ignoring " <> T.pack fp
+    else  do
+      -- Calculate the hash of the file's content.
+      bs <- readFile fp
+      let hash' = calcHash bs
 
-  -- Delete the local file if configured.
-  deleteAction <- asks (getField @"deleteAction")
-  case deleteAction of
-    Delete -> deleteFile fp
-    NoDelete -> pure ()
+      -- Only upload the file if it doesn't exist on the server.
+      fileExists <- doesFileExistInStore hash'
+      if fileExists
+        then logInfoN ("File exists on server; not uploading." :: Text)
+        else postFile fp
+
+      -- Delete the local file if configured.
+      deleteAction <- asks (getField @"deleteAction")
+      case deleteAction of
+        Delete -> deleteFile fp
+        NoDelete -> pure ()
 
 putFileMoveOnError
   :: ( FileSystemRead m
@@ -104,6 +125,7 @@ putFileMoveOnError
      , HttpRead m
      , HttpWrite m
      , HasField "deleteAction" env DeleteAction
+     , HasField "extensionsToIgnore" env (Set Text)
      , MonadReader env m
      , MonadLogger m
      )
@@ -123,6 +145,7 @@ uploadDirectoryMoveOnError
      , HttpRead m
      , HttpWrite m
      , HasField "deleteAction" env DeleteAction
+     , HasField "extensionsToIgnore" env (Set Text)
      , MonadReader env m
      , MonadLogger m
      )

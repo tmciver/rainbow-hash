@@ -14,7 +14,7 @@ import Protolude
 import Options.Applicative (Parser, metavar, strArgument, long, short, help, subparser, command, info, progDesc, ParserInfo, fullDesc, header, flag')
 
 import RainbowHash.CLI (putFileMoveOnError, watchDirectoryMoveOnError, uploadDirectoryMoveOnError)
-import RainbowHash.CLI.Config (Config (deleteAction), fromBool)
+import RainbowHash.CLI.Config (Config (..), fromBool)
 import RainbowHash.App (runApp)
 import System.Directory (doesDirectoryExist)
 
