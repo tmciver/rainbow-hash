@@ -3,8 +3,9 @@
 
 module Main where
 
-import Protolude hiding (get, put)
+import Protolude hiding (get, put, catch)
 
+import Data.Set.Ordered (OSet)
 import Web.Scotty hiding (put)
 import Network.HTTP.Types (status404)
 import Network.Wai.Parse
@@ -17,7 +18,7 @@ import qualified Data.Text.Encoding as T
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
-import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile)
+import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..))
 import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 import RainbowHash.Server.StorageDirectory (getStorageDir)
@@ -30,9 +31,9 @@ main = do
   env@(Env dir') <- getEnv
   createDirectoryIfMissing True dir'
   showEnv env
-  scotty 3000 $ do
+  scotty 3001 $ do
     get "/" homeView
-    get "/blobs" (showAllHashes env)
+    get "/blobs" (showHashes env)
     get "/blob/:hash" $ param "hash" >>= getBlob env
     addroute HEAD "/blob/:hash" $ param "hash" >>= headBlob env
     post "/blobs" (handleUpload env)
@@ -104,15 +105,19 @@ headBlob env hash' = do
   where notFound' :: ActionM ()
         notFound' = status status404
 
-showAllHashes :: Env -> ActionM ()
-showAllHashes env = do
-  allHashes <- liftIO $ runAppIO allFileIds env
-  html $ renderHtml $ hashesHtmlView allHashes
+showHashes :: Env -> ActionM ()
+showHashes env = do
+  ct <- param "content-type" `rescue` (\_ -> pure "")
+  let maybeFilter = case ct of
+        "" -> Nothing
+        _ -> Just $ FilterByContentType ct
+  metas <- liftIO $ runAppIO (filesMetadata maybeFilter) env
+  html $ renderHtml $ metasHtmlView metas
 
-hashesHtmlView :: Set FileId -> H.Html
-hashesHtmlView fileIds = template "Content" $ do
+metasHtmlView :: OSet FileMetadataOnly -> H.Html
+metasHtmlView metas = template "Content" $ do
   H.p "A list of all blobs:"
-  H.ul $ forM_ fileIds (H.li . fileIdToAnchor)
+  H.ul $ forM_ metas (H.li . fileIdToAnchor . fmoId)
 
 fileIdToUrl :: FileId -> TL.Text
 fileIdToUrl = TL.fromStrict . ("/blob/" <>) . getHash

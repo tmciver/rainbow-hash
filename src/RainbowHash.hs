@@ -10,6 +10,7 @@ module RainbowHash
   , calcHash
   , Hash
   , File(..)
+  , FileMetadataOnly(..)
   , FileId(..)
   , FileGet(..)
   , FilePut(..)
@@ -19,10 +20,12 @@ module RainbowHash
   , FileSystemRead(..)
   , CurrentTime(..)
   , ToByteString(..)
+  , Filter(..)
   ) where
 
 import Protolude hiding (readFile)
 
+import Data.Set.Ordered (OSet)
 import Data.Aeson (ToJSON(..), genericToJSON, defaultOptions, fieldLabelModifier, camelTo2, genericParseJSON, FromJSON(..))
 import qualified Data.ByteString as B
 import System.FilePath (takeFileName)
@@ -43,7 +46,7 @@ data Metadata = Metadata
   { mediaType :: MediaType
   , fileNames :: NESet FileName
   , uploadedAt :: UTCTime
-  } deriving (Eq, Show, Generic)
+  } deriving (Eq, Ord, Show, Generic)
 
 -- TODO: consider moving this to a second library to keep this module abstract.
 instance ToJSON Metadata where
@@ -58,10 +61,19 @@ data File = File
   , fileData :: ByteString
   }
 
+data FileMetadataOnly = FileMetadataOnly
+  { fmoId :: FileId
+  , fmoMetadata :: Metadata
+  } deriving (Eq, Ord)
+
+newtype Filter = FilterByContentType MediaType
+  deriving (Show)
+
 class Monad m => FileGet m where
   getFile :: FileId -> m (Maybe File)
   fileExists :: FileId -> m Bool
-  allFileIds :: m (Set FileId)
+  fileIds :: m (Set FileId) -- all file IDs
+  filesMetadata :: Maybe Filter -> m (OSet FileMetadataOnly) -- metadata for (a sub-set of) all files
 
 -- This is a low-level class used for implementation.  If you want to put a file
 -- in the store, use putFile.

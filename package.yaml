@@ -39,6 +39,7 @@ library:
   - monad-logger
   - mtl
   - nonempty-containers
+  - ordered-containers
   - split
   - temporary
   - text
@@ -60,6 +61,7 @@ executables:
     dependencies:
     - rainbow-hash
     - protolude
+    - containers
     - directory
     - http-types
     - scotty
@@ -67,7 +69,9 @@ executables:
     - http-types
     - bytestring
     - wai-extra
+    - ordered-containers
     - text
+    - unliftio
 
   rh-cli:
     main:                Main.hs

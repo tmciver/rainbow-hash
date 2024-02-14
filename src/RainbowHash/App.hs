@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module RainbowHash.App
   ( App(..)
@@ -11,6 +12,8 @@ module RainbowHash.App
 
 import Protolude hiding (readFile)
 
+import Data.Set.Ordered (OSet)
+import qualified Data.Set.Ordered as OSet
 import qualified Data.Time as DT
 import qualified Data.Set as Set
 import qualified System.Directory as D
@@ -27,7 +30,7 @@ import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
 import qualified Data.Yaml as YAML
 
 import RainbowHash.Env (Env(..))
-import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), File(..), FileSystemRead(..), Metadata(..), CurrentTime(..), ToByteString(..))
+import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), File(..), FileSystemRead(..), Metadata(..), CurrentTime(..), ToByteString(..), Filter (..), FileMetadataOnly (..))
 
 newtype App a = App { runApp :: ReaderT Env IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env, MonadMask, MonadCatch, MonadThrow)
@@ -85,16 +88,46 @@ instance FileGet App where
   fileExists fileId' =
     fileIdToFilePath fileId' >>= liftIO . D.doesFileExist
 
-  allFileIds = do
+  fileIds = do
     storageDir' <- asks storageDir
     firstTwo <- liftIO $ D.listDirectory storageDir'
-    fileIds <- liftIO $ mapM (fileIdsForDir storageDir') firstTwo
-    pure . Set.fromList $ join fileIds
+    fileIds' <- liftIO $ mapM (fileIdsForDir storageDir') firstTwo
+    pure . Set.fromList $ join fileIds'
       where fileIdsForDir :: FilePath -> FilePath -> IO [FileId]
             fileIdsForDir storageDir' firstTwo = do
               allFiles <- D.listDirectory $ storageDir' </> firstTwo
               let subHashes = filter (not . isSuffixOf (T.unpack metadataFileSuffix)) allFiles
               pure $ fmap (FileId . T.pack . (firstTwo <>)) subHashes
+
+  filesMetadata maybeFilter = do
+    allFileMetadata <- getAllFileMetadata
+    pure $ case maybeFilter of
+      Nothing -> allFileMetadata
+      Just filter' -> OSet.filter (mkFilter filter') allFileMetadata
+
+      where mkFilter :: Filter -> FileMetadataOnly -> Bool
+            mkFilter (FilterByContentType desiredMediaType) (FileMetadataOnly _ (Metadata mediaType' _ _)) =
+              desiredMediaType `T.isInfixOf` mediaType'
+
+getAllFileMetadata :: App (OSet FileMetadataOnly)
+getAllFileMetadata = do
+  fileIds' <- Set.toList <$> fileIds
+  maybeMetadatas :: [Maybe Metadata] <- traverse readFileMetadata fileIds'
+  let d :: [(FileId, Maybe Metadata)]
+      d = zip fileIds' maybeMetadatas
+
+      fun :: (FileId, Maybe Metadata) -> [(FileId, Metadata)] -> [(FileId, Metadata)]
+      fun (_, Nothing) acc = acc
+      fun (fileId', Just meta) acc = (fileId', meta) : acc
+
+      e :: [(FileId, Metadata)]
+      e = foldr fun [] d
+
+      f :: OSet FileMetadataOnly
+      f = e <&> uncurry FileMetadataOnly
+             & OSet.fromList
+
+  pure f
 
 instance FilePut App ByteString where
   putFileInternal fileId' metadata bs = do
