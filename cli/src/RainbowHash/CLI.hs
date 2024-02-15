@@ -11,7 +11,6 @@ module RainbowHash.CLI
   , FileSystemWrite(..)
   , DirectoryWatch(..)
   , HttpError(..)
-  , Filter(..)
   , putFile
   , putFileMoveOnError
   , watchDirectoryMoveOnError
@@ -20,12 +19,11 @@ module RainbowHash.CLI
 
 import Protolude hiding (readFile)
 
-import Text.URI (URI)
 import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
 import Control.Monad.Logger (MonadLogger, logInfoN)
 
-import RainbowHash (calcHash, Hash, Filter)
+import RainbowHash (calcHash, Hash)
 import System.FilePath ((</>), takeDirectory)
 import RainbowHash.CLI.Config (DeleteAction(..))
 import qualified Data.Text as T
@@ -38,7 +36,6 @@ class MonadError HttpError m => HttpWrite m where
 
 class HttpRead m where
   doesFileExistInStore :: Hash -> m Bool
-  getFiles :: [Filter] -> m (Set URI)
 
 class Monad m => FileSystemRead m where
   readFile :: FilePath -> m ByteString

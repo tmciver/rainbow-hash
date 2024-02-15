@@ -12,7 +12,6 @@ import Protolude
 
 import Control.Monad.Logger (MonadLogger(..), toLogStr, fromLogStr, logInfoN, logErrorN)
 import qualified Data.Set.Ordered as OSet
-import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Network.HTTP.Client.MultipartFormData (partFile)
@@ -78,9 +77,6 @@ instance HttpRead App where
     pure $ case eitherRes of
       Left (SomeException _) -> False
       Right res -> statusIsSuccessful . responseStatus $ res
-
-  getFiles filters = pure Set.empty
-    
 
 instance FileSystemRead App where
   readFile = liftIO . BS.readFile
