@@ -9,11 +9,12 @@ module RainbowHash.Command
   , options
   ) where
 
-import Protolude
+import Protolude hiding (filter)
 
-import Options.Applicative (Parser, metavar, strArgument, long, short, help, subparser, command, info, progDesc, ParserInfo, fullDesc, header, flag')
+import Options.Applicative (Parser, metavar, strArgument, long, short, help, subparser, command, info, progDesc, ParserInfo, fullDesc, header, flag', strOption)
 
-import RainbowHash.CLI (putFileMoveOnError, watchDirectoryMoveOnError, uploadDirectoryMoveOnError)
+import RainbowHash (Filter(..))
+import RainbowHash.CLI (putFileMoveOnError, watchDirectoryMoveOnError, uploadDirectoryMoveOnError, Filter(..), getFiles)
 import RainbowHash.CLI.Config (Config (..), fromBool)
 import RainbowHash.App (runApp)
 import System.Directory (doesDirectoryExist)
@@ -24,6 +25,7 @@ data Command
   -- two the user intended without checking if the path is a file or directory
   -- during parsing which cannot be done since option parsing is pure.
   | Upload UploadOptions
+  | Show Filter
   deriving (Show)
 
 data WatchDirOptions = WatchDirOptions
@@ -57,10 +59,20 @@ uploadCommand = Upload <$>
     <$> strArgument (metavar "FILE-OR-DIR" <> help "The file or directory to upload")
     <*> deleteParser)
 
+showCommand :: Parser Command
+showCommand = Show . FilterByContentType <$>
+  strOption
+  ( long "content-type"
+ <> short 'c'
+ <> metavar "CONTENT-TYPE"
+ <> help "show only files with this content-type"
+  )
+
 commandParser :: Parser Command
 commandParser = subparser
   ( command "watch" (info watchCommand (progDesc "Watch a given directory and upload files that are added to it. Does not upload existing files."))
  <> command "upload" (info uploadCommand (progDesc "Upload the given file or the files in the given directory."))
+ <> command "show" (info showCommand (progDesc "Show files satisfying the given filter."))
   )
 
 options :: ParserInfo Command
@@ -87,5 +99,10 @@ runCommand config cmd = do
                 then uploadDirectoryMoveOnError fileOrDirectory'
                 else putFileMoveOnError fileOrDirectory'
           runApp app config'
+
+        Show filter -> do
+          files <- runApp (getFiles [filter]) config
+          print files
+          pure $ Right ()
 
   either print pure eitherRes
