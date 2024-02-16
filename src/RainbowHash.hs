@@ -74,6 +74,7 @@ class Monad m => FileGet m where
   fileExists :: FileId -> m Bool
   fileIds :: m (Set FileId) -- all file IDs
   filesMetadata :: Maybe Filter -> m (OSet FileMetadataOnly) -- metadata for (a sub-set of) all files
+  contentTypes :: m (Set MediaType)
 
 -- This is a low-level class used for implementation.  If you want to put a file
 -- in the store, use putFile.
