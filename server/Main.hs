@@ -31,7 +31,7 @@ main = do
   env@(Env dir') <- getEnv
   createDirectoryIfMissing True dir'
   showEnv env
-  scotty 3001 $ do
+  scotty 3000 $ do
     get "/" homeView
     get "/blobs" (showHashes env)
     get "/blob/:hash" $ param "hash" >>= getBlob env
