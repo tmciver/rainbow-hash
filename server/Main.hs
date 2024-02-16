@@ -18,7 +18,7 @@ import qualified Data.Text.Encoding as T
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
-import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..))
+import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..), MediaType)
 import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 import RainbowHash.Server.StorageDirectory (getStorageDir)
@@ -31,10 +31,11 @@ main = do
   env@(Env dir') <- getEnv
   createDirectoryIfMissing True dir'
   showEnv env
-  scotty 3001 $ do
+  scotty 3000 $ do
     get "/" homeView
     get "/blobs" (showHashes env)
     get "/blob/:hash" $ param "hash" >>= getBlob env
+    get "/content-types" (showContentTypes env)
     addroute HEAD "/blob/:hash" $ param "hash" >>= headBlob env
     post "/blobs" (handleUpload env)
 
@@ -56,14 +57,20 @@ homeView = html $ renderHtml homeHtml
 
 homeHtml :: H.Html
 homeHtml = template "Home" $ do
+  contentTypesLink
   contentListLink
   fileUploadForm
 
 homeLink :: H.Html
 homeLink = (H.a . H.toHtml) ("Home" :: Text) H.! href "/"
 
+contentTypesLink :: H.Html
+contentTypesLink =
+  (H.a . H.toHtml) ("Files by content type" :: Text) H.! href "/content-types" >> H.br
+
 contentListLink :: H.Html
-contentListLink = (H.a . H.toHtml) ("See a list of all blobs." :: Text) H.! href "/blobs"
+contentListLink =
+  (H.a . H.toHtml) ("All files" :: Text) H.! href "/blobs" >> H.br
 
 fileUploadForm :: H.Html
 fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! action "/blobs" $ do
@@ -114,13 +121,29 @@ showHashes env = do
   metas <- liftIO $ runAppIO (filesMetadata maybeFilter) env
   html $ renderHtml $ metasHtmlView metas
 
+showContentTypes :: Env -> ActionM ()
+showContentTypes env = do
+  cts <- liftIO $ runAppIO contentTypes env
+  html $ renderHtml $ contentTypesHtmlView cts
+
 metasHtmlView :: OSet FileMetadataOnly -> H.Html
 metasHtmlView metas = template "Content" $ do
-  H.p "A list of all blobs:"
+  H.p "Files:"
   H.ul $ forM_ metas (H.li . fileIdToAnchor . fmoId)
+
+contentTypesHtmlView :: Set MediaType -> H.Html
+contentTypesHtmlView mts = template "Content Types" $ do
+  H.p "A list of all content types:"
+  H.ul $ forM_ mts (H.li . contentTypeToAnchor)
 
 fileIdToUrl :: FileId -> TL.Text
 fileIdToUrl = TL.fromStrict . ("/blob/" <>) . getHash
 
+mediaTypeToUrl :: MediaType -> TL.Text
+mediaTypeToUrl = TL.fromStrict . ("/blobs?content-type=" <>)
+
 fileIdToAnchor :: FileId -> H.Html
 fileIdToAnchor fileId' = (H.a . H.toHtml) (getHash fileId') H.! href (H.textValue $ toStrict $ fileIdToUrl fileId')
+
+contentTypeToAnchor :: MediaType -> H.Html
+contentTypeToAnchor mt = (H.a . H.toHtml) mt H.! href (H.textValue $ toStrict $ mediaTypeToUrl mt)

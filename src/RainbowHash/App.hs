@@ -109,6 +109,13 @@ instance FileGet App where
             mkFilter (FilterByContentType desiredMediaType) (FileMetadataOnly _ (Metadata mediaType' _ _)) =
               desiredMediaType `T.isInfixOf` mediaType'
 
+  contentTypes = do
+    allFileMetadata <- getAllFileMetadata
+    allFileMetadata & OSet.toSet
+                    & Set.map (mediaType . fmoMetadata)
+                    & foldl (flip Set.insert) Set.empty
+                    & pure
+
 getAllFileMetadata :: App (OSet FileMetadataOnly)
 getAllFileMetadata = do
   fileIds' <- Set.toList <$> fileIds
