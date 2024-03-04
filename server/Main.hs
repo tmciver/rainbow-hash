@@ -18,7 +18,7 @@ import qualified Data.Text.Encoding as T
 import Network.HTTP.Types.Status (status201)
 
 import qualified RainbowHash as RH
-import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..), MediaType)
+import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..), MediaType(..), MediaTypeName, mediaTypeToText)
 import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 import RainbowHash.Server.StorageDirectory (getStorageDir)
@@ -99,7 +99,7 @@ getBlob env hash' = do
     Nothing -> notFound'
     Just (File _ (Metadata mediaType _ _) bs) -> do
       let strictData = LB.fromStrict bs
-      setHeader "Content-Type" (TL.fromStrict mediaType)
+      setHeader "Content-Type" (TL.fromStrict . mediaTypeToText $ mediaType)
       raw strictData
     where notFound' :: ActionM ()
           notFound' = status status404
@@ -139,11 +139,11 @@ contentTypesHtmlView mts = template "Content Types" $ do
 fileIdToUrl :: FileId -> TL.Text
 fileIdToUrl = TL.fromStrict . ("/blob/" <>) . getHash
 
-mediaTypeToUrl :: MediaType -> TL.Text
+mediaTypeToUrl :: MediaTypeName -> TL.Text
 mediaTypeToUrl = TL.fromStrict . ("/blobs?content-type=" <>)
 
 fileIdToAnchor :: FileId -> H.Html
 fileIdToAnchor fileId' = (H.a . H.toHtml) (getHash fileId') H.! href (H.textValue $ toStrict $ fileIdToUrl fileId')
 
 contentTypeToAnchor :: MediaType -> H.Html
-contentTypeToAnchor mt = (H.a . H.toHtml) mt H.! href (H.textValue $ toStrict $ mediaTypeToUrl mt)
+contentTypeToAnchor (MediaType mt _) = (H.a . H.toHtml) mt H.! href (H.textValue $ toStrict $ mediaTypeToUrl mt)

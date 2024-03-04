@@ -12,6 +12,8 @@ module RainbowHash.App
 
 import Protolude hiding (readFile)
 
+import Data.Aeson (ToJSON(..), FromJSON(..), Value(String), withText, withObject, (.:), (.=), object)
+import Control.Monad (fail)
 import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
 import qualified Data.Time as DT
@@ -30,13 +32,38 @@ import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
 import qualified Data.Yaml as YAML
 
 import RainbowHash.Env (Env(..))
-import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), File(..), FileSystemRead(..), Metadata(..), CurrentTime(..), ToByteString(..), Filter (..), FileMetadataOnly (..))
+import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), File(..), FileSystemRead(..), CurrentTime(..), ToByteString(..), Filter (..), FileMetadataOnly (..))
+import qualified RainbowHash as RH
 
 newtype App a = App { runApp :: ReaderT Env IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env, MonadMask, MonadCatch, MonadThrow)
 
 runAppIO :: App a -> Env -> IO a
 runAppIO = runReaderT . runApp
+
+newtype MediaType = MediaType { getRHMediaType :: RH.MediaType }
+
+instance ToJSON MediaType where
+  toJSON (MediaType rhMediaType) = String $ RH.mediaTypeToText rhMediaType
+
+instance FromJSON MediaType where
+  parseJSON = withText "MediaType" $ \t ->
+    maybe (fail $ "Could not parse media type" <> T.unpack t) (pure . MediaType) (RH.parseMediaType t)
+
+newtype Metadata = Metadata { getRHMetadata :: RH.Metadata }
+
+instance ToJSON Metadata where
+  toJSON (Metadata (RH.Metadata mt fileNames uploadedAt)) = object
+    [ "media_type" .= MediaType mt
+    , "file_names" .= fileNames
+    , "uploaded_at" .= uploadedAt
+    ]
+
+instance FromJSON Metadata where
+  parseJSON = withObject "Metadata" $ \o -> do
+    Metadata <$> (RH.Metadata <$> (getRHMediaType <$> (o .: "media_type"))
+                              <*> o .: "file_names"
+                              <*> o .: "uploaded_at")
 
 fileIdToFilePath
   :: FileId       -- ^The ID of a file.
@@ -82,7 +109,7 @@ instance FileGet App where
           Nothing -> do
             logErrorN $ "Could not get metadata for file " <> show (getHash fileId')
             pure Nothing
-          Just metadata -> pure . Just $ File fileId' metadata bs
+          Just metadata -> pure . Just $ File fileId' (getRHMetadata metadata) bs
       else pure Nothing
 
   fileExists fileId' =
@@ -106,13 +133,13 @@ instance FileGet App where
       Just filter' -> OSet.filter (mkFilter filter') allFileMetadata
 
       where mkFilter :: Filter -> FileMetadataOnly -> Bool
-            mkFilter (FilterByContentType desiredMediaType) (FileMetadataOnly _ (Metadata mediaType' _ _)) =
+            mkFilter (FilterByContentType desiredMediaType) (FileMetadataOnly _ (RH.Metadata (RH.MediaType mediaType' _) _ _)) =
               desiredMediaType `T.isInfixOf` mediaType'
 
   contentTypes = do
     allFileMetadata <- getAllFileMetadata
     allFileMetadata & OSet.toSet
-                    & Set.map (mediaType . fmoMetadata)
+                    & Set.map (RH.mediaType . fmoMetadata)
                     & foldl (flip Set.insert) Set.empty
                     & pure
 
@@ -131,7 +158,7 @@ getAllFileMetadata = do
       e = foldr fun [] d
 
       f :: OSet FileMetadataOnly
-      f = e <&> uncurry FileMetadataOnly
+      f = e <&> uncurry FileMetadataOnly . fmap getRHMetadata
              & OSet.fromList
 
   pure f
@@ -142,14 +169,18 @@ instance FilePut App ByteString where
     let dir = takeDirectory dataFilePath
     liftIO $ D.createDirectoryIfMissing True dir
     liftIO $ BS.writeFile dataFilePath bs
-    writeFileMetadata fileId' metadata
+    writeFileMetadata fileId' (Metadata metadata)
+
+defaultMediaType :: RH.MediaType
+defaultMediaType = RH.MediaType "application/octet-stream" "binary"
 
 instance MediaTypeDiscover App FilePath where
   getMediaType fp = do
     magic <- liftIO $ magicOpen [MagicMime]
     liftIO $ magicLoadDefault magic
     mime <- liftIO $ magicFile magic fp
-    pure (T.pack mime)
+    let mt = mime & T.pack & RH.parseMediaType & fromMaybe defaultMediaType
+    pure mt
 
 instance MediaTypeDiscover App ByteString where
   getMediaType bs = withSystemTempFile "rainbowhash-" $ \fp h -> do
@@ -158,7 +189,8 @@ instance MediaTypeDiscover App ByteString where
     magic <- liftIO $ magicOpen [MagicMime]
     liftIO $ magicLoadDefault magic
     mime <- liftIO $ magicFile magic fp
-    pure (T.pack mime)
+    let mt = mime & T.pack & RH.parseMediaType & fromMaybe defaultMediaType
+    pure mt
 
 instance FileSystemRead App where
   readFile = liftIO . BS.readFile

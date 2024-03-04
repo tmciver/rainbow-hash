@@ -15,18 +15,21 @@ module RainbowHash
   , FileGet(..)
   , FilePut(..)
   , MediaTypeDiscover(..)
-  , MediaType
+  , MediaTypeName
+  , CharSet
+  , MediaType(..)
   , Metadata(..)
   , FileSystemRead(..)
   , CurrentTime(..)
   , ToByteString(..)
   , Filter(..)
+  , mediaTypeToText
+  , parseMediaType
   ) where
 
 import Protolude hiding (readFile)
 
 import Data.Set.Ordered (OSet)
-import Data.Aeson (ToJSON(..), genericToJSON, defaultOptions, fieldLabelModifier, camelTo2, genericParseJSON, FromJSON(..))
 import qualified Data.ByteString as B
 import System.FilePath (takeFileName)
 import qualified Crypto.Hash as C
@@ -37,23 +40,31 @@ import Data.Time (UTCTime)
 import qualified Data.Text as T
 
 type Hash = Text
-
 newtype FileId = FileId { getHash :: Hash }
   deriving (Eq, Ord, Show)
-type MediaType = Text
 type FileName = Text
+type MediaTypeName = Text
+type CharSet = Text
+data MediaType = MediaType
+  { mediaTypeName :: MediaTypeName
+  , mediaTypeCharSet :: CharSet
+  } deriving (Eq, Ord, Show, Generic)
+
+parseMediaType :: Text -> Maybe MediaType
+parseMediaType t = case T.splitOn ";" t of
+  [ct, charSet] -> if " charset=" `T.isPrefixOf` charSet
+    then Just $ MediaType (T.strip ct) (T.drop 9 charSet)
+    else Nothing
+  _ -> Nothing
+
+mediaTypeToText :: MediaType -> Text
+mediaTypeToText (MediaType name' charSet) = name' <> "; charset=" <> charSet
+
 data Metadata = Metadata
   { mediaType :: MediaType
   , fileNames :: NESet FileName
   , uploadedAt :: UTCTime
   } deriving (Eq, Ord, Show, Generic)
-
--- TODO: consider moving this to a second library to keep this module abstract.
-instance ToJSON Metadata where
-  toJSON = genericToJSON defaultOptions { fieldLabelModifier = camelTo2 '_'}
-
-instance FromJSON Metadata where
-  parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = camelTo2 '_'}
 
 data File = File
   { fileId :: FileId
@@ -66,7 +77,7 @@ data FileMetadataOnly = FileMetadataOnly
   , fmoMetadata :: Metadata
   } deriving (Eq, Ord)
 
-newtype Filter = FilterByContentType MediaType
+newtype Filter = FilterByContentType MediaTypeName
   deriving (Show)
 
 class Monad m => FileGet m where
@@ -98,7 +109,7 @@ logMediaType
   => MediaType
   -> m MediaType
 logMediaType mediaType' = do
-  logInfoN $ "This content has content type \"" <> mediaType' <> "\""
+  logInfoN $ "This content has content type \"" <> mediaTypeName mediaType' <> "\""
   pure mediaType'
 
 putFile
