@@ -43,7 +43,7 @@ instance HttpWrite App where
     logInfoN $ "Uploading file at " <> T.pack fp <> " to " <> T.pack url
     let part = partFile "" fp
         opts = defaults & set checkResponse (Just $ \_ _ -> pure ()) -- I'm not sure if this is working: still get an exception if server is not up.
-                        & manager .~ Left defaultManagerSettings { managerResponseTimeout = responseTimeoutMicro 3000000 }
+                        & manager .~ Left defaultManagerSettings { managerResponseTimeout = responseTimeoutMicro 60000000 } -- 60 seconds
     eitherRes <- liftIO $ try $ postWith opts url part
     case eitherRes of
       Left (SomeException e) -> do
