@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
 import Protolude hiding (get, put, catch)
 
+import Control.Monad.Catch (catch)
 import Data.Set.Ordered (OSet)
 import Web.Scotty hiding (put)
 import Network.HTTP.Types (status404)
@@ -34,9 +36,9 @@ main = do
   scotty 3000 $ do
     get "/" homeView
     get "/blobs" (showHashes env)
-    get "/blob/:hash" $ param "hash" >>= getBlob env
+    get "/blob/:hash" $ captureParam "hash" >>= getBlob env
     get "/content-types" (showContentTypes env)
-    addroute HEAD "/blob/:hash" $ param "hash" >>= headBlob env
+    addroute HEAD "/blob/:hash" $ captureParam "hash" >>= headBlob env
     post "/blobs" (handleUpload env)
 
 getEnv :: IO Env
@@ -114,7 +116,7 @@ headBlob env hash' = do
 
 showHashes :: Env -> ActionM ()
 showHashes env = do
-  ct <- param "content-type" `rescue` (\_ -> pure "")
+  ct <- captureParam "content-type" `catch` (\(_ :: SomeException) -> pure "")
   let maybeFilter = case ct of
         "" -> Nothing
         _ -> Just $ FilterByContentType ct

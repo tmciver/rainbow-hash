@@ -60,6 +60,7 @@ executables:
     - -Wall
     dependencies:
     - rainbow-hash
+    - exceptions
     - protolude
     - containers
     - directory

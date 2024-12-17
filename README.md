@@ -21,6 +21,11 @@ During development use
 To always show compiler warnings (they're suppressed after the first build
 otherwise.)
 
+If you make changes to the `package.yaml` file, you'll need to regenerate
+`rainbow-hash.cabal` using
+
+    $ hpack
+
 ## Running
 
 ### Server
