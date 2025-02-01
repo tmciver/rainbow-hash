@@ -15,24 +15,25 @@ import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 import Text.Blaze.Html.Renderer.Text (renderHtml)
 import qualified Data.ByteString.Lazy as LB
+import Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import Network.HTTP.Types.Status (status201)
+import System.Directory (createDirectoryIfMissing)
+import Network.HTTP.Types.Method (StdMethod(HEAD))
 
 import qualified RainbowHash as RH
 import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..), MediaType(..), MediaTypeName, mediaTypeToText)
 import RainbowHash.App (runAppIO)
 import RainbowHash.Env (Env(..))
 import RainbowHash.Server.StorageDirectory (getStorageDir)
-import qualified Data.Text as T
-import System.Directory (createDirectoryIfMissing)
-import Network.HTTP.Types.Method (StdMethod(HEAD))
 
 main :: IO ()
 main = do
   env@(Env dir') <- getEnv
   createDirectoryIfMissing True dir'
   showEnv env
+  -- TODO: parameterize port
   scotty 3000 $ do
     get "/" homeView
     get "/blobs" (showHashes env)
@@ -80,6 +81,9 @@ fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! 
   H.br
   H.input H.! type_ "submit"
 
+getHost :: ActionM Text
+getHost = header "Host" <&> maybe "localhost" TL.toStrict
+
 handleUpload :: Env -> ActionM ()
 handleUpload env = do
   fs <- files
@@ -89,8 +93,9 @@ handleUpload env = do
       let fcontent = LB.toStrict $ fileContent fi
           fileName' = T.decodeUtf8 $ fileName fi
       fileId' <- liftIO $ runAppIO (putFile fcontent fileName') env
+      host <- getHost
       status status201
-      addHeader "Location" (fileIdToUrl fileId')
+      addHeader "Location" (fileIdToUrl host fileId')
       homeView
 
 getBlob :: Env -> Text -> ActionM ()
@@ -121,31 +126,32 @@ showHashes env = do
         "" -> Nothing
         _ -> Just $ FilterByContentType ct
   metas <- liftIO $ runAppIO (filesMetadata maybeFilter) env
-  html $ renderHtml $ metasHtmlView metas
+  host <- getHost
+  html $ renderHtml $ metasHtmlView host metas
 
 showContentTypes :: Env -> ActionM ()
 showContentTypes env = do
   cts <- liftIO $ runAppIO contentTypes env
   html $ renderHtml $ contentTypesHtmlView cts
 
-metasHtmlView :: OSet FileMetadataOnly -> H.Html
-metasHtmlView metas = template "Content" $ do
+metasHtmlView :: Text -> OSet FileMetadataOnly -> H.Html
+metasHtmlView host metas = template "Content" $ do
   H.p "Files:"
-  H.ul $ forM_ metas (H.li . fileIdToAnchor . fmoId)
+  H.ul $ forM_ metas (H.li . fileIdToAnchor host . fmoId)
 
 contentTypesHtmlView :: Set MediaType -> H.Html
 contentTypesHtmlView mts = template "Content Types" $ do
   H.p "A list of all content types:"
   H.ul $ forM_ mts (H.li . contentTypeToAnchor)
 
-fileIdToUrl :: FileId -> TL.Text
-fileIdToUrl = TL.fromStrict . ("/blob/" <>) . getHash
+fileIdToUrl :: Text -> FileId -> TL.Text
+fileIdToUrl host = TL.fromStrict . (("http://" <> host <> "/blob/") <>) . getHash
 
 mediaTypeToUrl :: MediaTypeName -> TL.Text
 mediaTypeToUrl = TL.fromStrict . ("/blobs?content-type=" <>)
 
-fileIdToAnchor :: FileId -> H.Html
-fileIdToAnchor fileId' = (H.a . H.toHtml) (getHash fileId') H.! href (H.textValue $ toStrict $ fileIdToUrl fileId')
+fileIdToAnchor :: Text -> FileId -> H.Html
+fileIdToAnchor host fileId' = (H.a . H.toHtml) (getHash fileId') H.! href (H.textValue $ toStrict $ fileIdToUrl host fileId')
 
 contentTypeToAnchor :: MediaType -> H.Html
 contentTypeToAnchor (MediaType mt _) = (H.a . H.toHtml) mt H.! href (H.textValue $ toStrict $ mediaTypeToUrl mt)

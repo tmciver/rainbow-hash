@@ -1,4 +1,4 @@
 {
-  rev = "057f9aecfb71c4437d2b27d3323df7f93c010b7e"; # nixos 23.11
-  sha256 = "1ndiv385w1qyb3b18vw13991fzb9wg4cl21wglk89grsfsnra41k";
+  rev = "035f8c0853c2977b24ffc4d0a42c74f00b182cd8"; # nixos 24.11
+  sha256 = "10mkjpj3wigr6w5azrq0nf784kncf6pplm075ndniakhbwkwjwb2";
 }
