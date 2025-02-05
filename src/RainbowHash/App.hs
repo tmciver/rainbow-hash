@@ -163,7 +163,7 @@ getAllFileMetadata = do
 
   pure f
 
-instance FilePut App ByteString where
+instance FilePut App where
   putFileInternal fileId' metadata bs = do
     dataFilePath <- fileIdToFilePath fileId'
     let dir = takeDirectory dataFilePath

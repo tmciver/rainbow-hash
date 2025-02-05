@@ -89,8 +89,8 @@ class Monad m => FileGet m where
 
 -- This is a low-level class used for implementation.  If you want to put a file
 -- in the store, use putFile.
-class Monad m => FilePut m v where
-  putFileInternal :: FileId -> Metadata -> v -> m ()
+class Monad m => FilePut m where
+  putFileInternal :: FileId -> Metadata -> ByteString -> m ()
 
 class MediaTypeDiscover m v where
   getMediaType :: v -> m MediaType
@@ -114,7 +114,7 @@ logMediaType mediaType' = do
 
 putFile
   :: ( FileGet m
-     , FilePut m ByteString -- does this need to be parameterized on the value?
+     , FilePut m
      , MediaTypeDiscover m v
      , CurrentTime m
      , MonadLogger m
@@ -162,7 +162,7 @@ putFile v fileName = do
 -- client and you want to record the client name), the use putFile instead.
 putFileFromFilePath
   :: ( FileGet m
-     , FilePut m ByteString
+     , FilePut m
      , MediaTypeDiscover m FilePath
      , ToByteString m FilePath
      , FileSystemRead m
