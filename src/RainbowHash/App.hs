@@ -23,8 +23,6 @@ import qualified Data.ByteString as BS
 import Magic
 import Control.Monad.Logger (MonadLogger(..), toLogStr, fromLogStr, logErrorN)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.IO as T
 import System.FilePath ((</>), takeDirectory)
 import System.IO (hFlush)
 import System.IO.Temp (withSystemTempFile)
@@ -34,6 +32,7 @@ import qualified Data.Yaml as YAML
 import RainbowHash.Env (Env(..))
 import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), File(..), FileSystemRead(..), CurrentTime(..), ToByteString(..), Filter (..), FileMetadataOnly (..))
 import qualified RainbowHash as RH
+import RainbowHash.Logger (writeLog)
 
 newtype App a = App { runApp :: ReaderT Env IO a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env, MonadMask, MonadCatch, MonadThrow)
@@ -205,5 +204,5 @@ instance ToByteString App FilePath where
   toByteString = readFile
 
 instance MonadLogger App where
-  monadLoggerLog _ _ level msg =
-    liftIO $ T.putStrLn $ show level <> " " <> (T.decodeUtf8 . fromLogStr . toLogStr) msg
+  monadLoggerLog _ _ level =
+    liftIO . writeLog level . decodeUtf8 . fromLogStr . toLogStr

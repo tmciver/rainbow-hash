@@ -7,6 +7,9 @@ import Protolude
 
 import Control.Monad.Logger (LogLevel(..))
 import qualified Data.Text as T
+import Data.Time (UTCTime)
+import Data.Time.Format (formatTime, defaultTimeLocale)
+import Data.Time.Clock (getCurrentTime)
 import System.Environment (lookupEnv)
 
 getLogLevelConfig :: IO LogLevel
@@ -27,5 +30,8 @@ readLogLevel levelText = case T.toLower levelText of
 writeLog :: LogLevel -> Text -> IO ()
 writeLog level msg = do
   configLevel <- getLogLevelConfig
-  when (level >= configLevel) $
-    putStrLn $ showLogLevel level <> " " <> msg
+  when (level >= configLevel) $ do
+    time <- getCurrentTime
+    putStrLn $ showTime time <> " " <> showLogLevel level <> " " <> msg
+  where showTime :: UTCTime -> Text
+        showTime = T.pack . formatTime defaultTimeLocale "%F %T%Z"
