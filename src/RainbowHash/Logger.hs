@@ -32,6 +32,6 @@ writeLog level msg = do
   configLevel <- getLogLevelConfig
   when (level >= configLevel) $ do
     time <- getCurrentTime
-    putStrLn $ showTime time <> " " <> showLogLevel level <> " " <> msg
+    putStrLn $ showTime time <> " " <> showLogLevel level <> ": " <> msg
   where showTime :: UTCTime -> Text
         showTime = T.pack . iso8601Show
