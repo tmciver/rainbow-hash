@@ -5,7 +5,7 @@
   wreq, yaml, optparse-applicative
 }:
 mkDerivation {
-  name = "rainbow-hash";
+  pname = "rainbow-hash";
   version = "0.1.0.0";
   src = ./.;
   isLibrary = false;
