@@ -1,4 +1,4 @@
-module RainbowHash.Server.StorageDirectory
+module RainbowHash.StorageDirectory
   ( getDefaultStorageDir
   , getStorageDirFromCLI
   , getStorageDir

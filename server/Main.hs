@@ -15,7 +15,6 @@ import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 import Text.Blaze.Html.Renderer.Text (renderHtml)
 import qualified Data.ByteString.Lazy as LB
-import Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import Network.HTTP.Types.Status (status201)
@@ -25,29 +24,20 @@ import Network.HTTP.Types.Method (StdMethod(HEAD))
 import qualified RainbowHash as RH
 import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..), MediaType(..), MediaTypeName, mediaTypeToText)
 import RainbowHash.App (runAppIO)
-import RainbowHash.Config (Config(..))
-import RainbowHash.Server.StorageDirectory (getStorageDir)
+import RainbowHash.Config (Config(..), getConfig, showConfig)
 
 main :: IO ()
 main = do
-  config@(Config dir') <- getConfig
+  config@(Config dir' port') <- getConfig
   createDirectoryIfMissing True dir'
   showConfig config
-  -- TODO: parameterize port
-  scotty 3000 $ do
+  scotty (fromIntegral port') $ do
     get "/" homeView
     get "/blobs" (showHashes config)
     get "/blob/:hash" $ captureParam "hash" >>= getBlob config
     get "/content-types" (showContentTypes config)
     addroute HEAD "/blob/:hash" $ captureParam "hash" >>= headBlob config
     post "/blobs" (handleUpload config)
-
-getConfig :: IO Config
-getConfig = Config <$> getStorageDir
-
-showConfig :: Config -> IO ()
-showConfig (Config storageDir') =
-  putStrLn $ ("Using directory " :: Text) <> T.pack storageDir' <> " for blob storage."
 
 template :: Text -> H.Html -> H.Html
 template title' body' = H.docTypeHtml $ do
