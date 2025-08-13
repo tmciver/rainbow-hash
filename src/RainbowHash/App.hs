@@ -29,15 +29,15 @@ import System.IO.Temp (withSystemTempFile)
 import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
 import qualified Data.Yaml as YAML
 
-import RainbowHash.Env (Env(..))
+import RainbowHash.Config (Config(..))
 import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), File(..), FileSystemRead(..), CurrentTime(..), ToByteString(..), Filter (..), FileMetadataOnly (..))
 import qualified RainbowHash as RH
 import RainbowHash.Logger (writeLog)
 
-newtype App a = App { runApp :: ReaderT Env IO a }
-  deriving (Functor, Applicative, Monad, MonadIO, MonadReader Env, MonadMask, MonadCatch, MonadThrow)
+newtype App a = App { runApp :: ReaderT Config IO a }
+  deriving (Functor, Applicative, Monad, MonadIO, MonadReader Config, MonadMask, MonadCatch, MonadThrow)
 
-runAppIO :: App a -> Env -> IO a
+runAppIO :: App a -> Config -> IO a
 runAppIO = runReaderT . runApp
 
 newtype MediaType = MediaType { getRHMediaType :: RH.MediaType }
