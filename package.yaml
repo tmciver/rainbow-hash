@@ -29,7 +29,6 @@ library:
   - -Wall
   dependencies:
   - protolude
-  - aeson
   - bytestring
   - containers
   - directory
@@ -41,11 +40,9 @@ library:
   - nonempty-containers
   - ordered-containers
   - split
-  - temporary
   - text
   - time
   - transformers
-  - yaml
 
 executables:
   rh-server:
@@ -60,10 +57,12 @@ executables:
     - -Wall
     dependencies:
     - rainbow-hash
+    - aeson
     - exceptions
     - protolude
     - containers
     - directory
+    - filepath
     - http-types
     - scotty
     - blaze-html
@@ -73,8 +72,11 @@ executables:
     - monad-logger
     - optparse-applicative
     - ordered-containers
+    - temporary
     - text
+    - time
     - unliftio
+    - yaml
 
   rh-cli:
     main:                Main.hs

@@ -5,7 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module RainbowHash.App
+module RainbowHash.Server.App
   ( App(..)
   , runAppIO
   ) where
@@ -29,7 +29,7 @@ import System.IO.Temp (withSystemTempFile)
 import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
 import qualified Data.Yaml as YAML
 
-import RainbowHash.Config (Config(..))
+import RainbowHash.Server.Config (Config(..))
 import RainbowHash (FileGet(..), FilePut(..), MediaTypeDiscover(..), FileId(..), File(..), FileSystemRead(..), CurrentTime(..), ToByteString(..), Filter (..), FileMetadataOnly (..))
 import qualified RainbowHash as RH
 import RainbowHash.Logger (writeLog)

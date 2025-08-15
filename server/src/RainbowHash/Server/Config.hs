@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module RainbowHash.Config
+module RainbowHash.Server.Config
   ( Config(..)
   ) where
 

@@ -27,8 +27,8 @@ import Network.HTTP.Types.Method (StdMethod(HEAD))
 
 import qualified RainbowHash as RH
 import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..), MediaType(..), MediaTypeName, mediaTypeToText)
-import RainbowHash.App (runAppIO)
-import RainbowHash.Config (Config(..))
+import RainbowHash.Server.App (runAppIO)
+import RainbowHash.Server.Config (Config(..))
 import RainbowHash.Logger (writeLog)
 import RainbowHash.Server.Options (getOptionsParser, Options(..))
 
