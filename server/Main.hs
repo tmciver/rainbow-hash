@@ -1,53 +1,56 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
 import Protolude hiding (get, put, catch)
 
 import Control.Monad.Catch (catch)
+import Control.Monad.Logger (LogLevel(LevelInfo))
 import Data.Set.Ordered (OSet)
-import Web.Scotty hiding (put)
+import qualified Data.Text as T
+import Web.Scotty hiding (put, options, Options(..))
 import Network.HTTP.Types (status404)
 import Network.Wai.Parse
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5.Attributes
 import Text.Blaze.Html.Renderer.Text (renderHtml)
 import qualified Data.ByteString.Lazy as LB
-import Data.Text as T
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import Network.HTTP.Types.Status (status201)
+import Options.Applicative (execParser)
 import System.Directory (createDirectoryIfMissing)
 import Network.HTTP.Types.Method (StdMethod(HEAD))
 
 import qualified RainbowHash as RH
 import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..), MediaType(..), MediaTypeName, mediaTypeToText)
 import RainbowHash.App (runAppIO)
-import RainbowHash.Env (Env(..))
-import RainbowHash.Server.StorageDirectory (getStorageDir)
+import RainbowHash.Config (Config(..))
+import RainbowHash.Logger (writeLog)
+import RainbowHash.Server.Options (getOptionsParser, Options(..))
 
 main :: IO ()
 main = do
-  env@(Env dir') <- getEnv
-  createDirectoryIfMissing True dir'
-  showEnv env
-  -- TODO: parameterize port
-  scotty 3000 $ do
+  optsParser <- getOptionsParser
+  options@Options {..} <- execParser optsParser
+  let config = Config storageDir
+  createDirectoryIfMissing True storageDir
+  logOptions options
+  scotty (fromIntegral port) $ do
     get "/" homeView
-    get "/blobs" (showHashes env)
-    get "/blob/:hash" $ captureParam "hash" >>= getBlob env
-    get "/content-types" (showContentTypes env)
-    addroute HEAD "/blob/:hash" $ captureParam "hash" >>= headBlob env
-    post "/blobs" (handleUpload env)
+    get "/blobs" (showHashes config)
+    get "/blob/:hash" $ captureParam "hash" >>= getBlob config
+    get "/content-types" (showContentTypes config)
+    addroute HEAD "/blob/:hash" $ captureParam "hash" >>= headBlob config
+    post "/blobs" (handleUpload config)
 
-getEnv :: IO Env
-getEnv = Env <$> getStorageDir
-
-showEnv :: Env -> IO ()
-showEnv (Env storageDir') =
-  putStrLn $ ("Using directory " :: Text) <> T.pack storageDir' <> " for blob storage."
+logOptions :: Options -> IO ()
+logOptions Options{..} = do
+  writeLog LevelInfo $ ("Running on port " :: Text) <> show port
+  writeLog LevelInfo $ ("Using directory " :: Text) <> T.pack storageDir <> " for blob storage."
 
 template :: Text -> H.Html -> H.Html
 template title' body' = H.docTypeHtml $ do
@@ -84,24 +87,24 @@ fileUploadForm = H.form H.! method "post" H.! enctype "multipart/form-data" H.! 
 getHost :: ActionM Text
 getHost = header "Host" <&> maybe "localhost" TL.toStrict
 
-handleUpload :: Env -> ActionM ()
-handleUpload env = do
+handleUpload :: Config -> ActionM ()
+handleUpload config = do
   fs <- files
   case headMay fs of
     Nothing -> pure ()
     Just (_, fi) -> do
       let fcontent = LB.toStrict $ fileContent fi
           fileName' = T.decodeUtf8 $ fileName fi
-      fileId' <- liftIO $ runAppIO (putFile fcontent fileName') env
+      fileId' <- liftIO $ runAppIO (putFile fcontent fileName') config
       host <- getHost
       status status201
       addHeader "Location" (fileIdToUrl host fileId')
       homeView
 
-getBlob :: Env -> Text -> ActionM ()
-getBlob env hash' = do
+getBlob :: Config -> Text -> ActionM ()
+getBlob config hash' = do
   let fileId' = FileId hash'
-  maybeFile <- liftIO $ runAppIO (RH.getFile fileId') env
+  maybeFile <- liftIO $ runAppIO (RH.getFile fileId') config
   case maybeFile of
     Nothing -> notFound'
     Just (File _ (Metadata mediaType _ _) bs) -> do
@@ -111,27 +114,27 @@ getBlob env hash' = do
     where notFound' :: ActionM ()
           notFound' = status status404
 
-headBlob :: Env -> Text -> ActionM ()
-headBlob env hash' = do
+headBlob :: Config -> Text -> ActionM ()
+headBlob config hash' = do
   let fileId' = FileId hash'
-  fileExists' <- liftIO $ runAppIO (RH.fileExists fileId') env
+  fileExists' <- liftIO $ runAppIO (RH.fileExists fileId') config
   unless fileExists' notFound'
   where notFound' :: ActionM ()
         notFound' = status status404
 
-showHashes :: Env -> ActionM ()
-showHashes env = do
+showHashes :: Config -> ActionM ()
+showHashes config = do
   ct <- captureParam "content-type" `catch` (\(_ :: SomeException) -> pure "")
   let maybeFilter = case ct of
         "" -> Nothing
         _ -> Just $ FilterByContentType ct
-  metas <- liftIO $ runAppIO (filesMetadata maybeFilter) env
+  metas <- liftIO $ runAppIO (filesMetadata maybeFilter) config
   host <- getHost
   html $ renderHtml $ metasHtmlView host metas
 
-showContentTypes :: Env -> ActionM ()
-showContentTypes env = do
-  cts <- liftIO $ runAppIO contentTypes env
+showContentTypes :: Config -> ActionM ()
+showContentTypes config = do
+  cts <- liftIO $ runAppIO contentTypes config
   html $ renderHtml $ contentTypesHtmlView cts
 
 metasHtmlView :: Text -> OSet FileMetadataOnly -> H.Html
