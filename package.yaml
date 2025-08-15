@@ -70,6 +70,8 @@ executables:
     - http-types
     - bytestring
     - wai-extra
+    - monad-logger
+    - optparse-applicative
     - ordered-containers
     - text
     - unliftio

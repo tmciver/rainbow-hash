@@ -1,14 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
 import Protolude hiding (get, put, catch)
 
 import Control.Monad.Catch (catch)
+import Control.Monad.Logger (LogLevel(LevelInfo))
 import Data.Set.Ordered (OSet)
-import Web.Scotty hiding (put)
+import qualified Data.Text as T
+import Web.Scotty hiding (put, options, Options(..))
 import Network.HTTP.Types (status404)
 import Network.Wai.Parse
 import qualified Text.Blaze.Html5 as H
@@ -18,26 +21,36 @@ import qualified Data.ByteString.Lazy as LB
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Encoding as T
 import Network.HTTP.Types.Status (status201)
+import Options.Applicative (execParser)
 import System.Directory (createDirectoryIfMissing)
 import Network.HTTP.Types.Method (StdMethod(HEAD))
 
 import qualified RainbowHash as RH
 import RainbowHash (FileId(..), FileGet(..), File(..), Metadata(Metadata), putFile, FileMetadataOnly(..), Filter(..), MediaType(..), MediaTypeName, mediaTypeToText)
 import RainbowHash.App (runAppIO)
-import RainbowHash.Config (Config(..), getConfig, showConfig)
+import RainbowHash.Config (Config(..))
+import RainbowHash.Logger (writeLog)
+import RainbowHash.Server.Options (getOptionsParser, Options(..))
 
 main :: IO ()
 main = do
-  config@(Config dir' port') <- getConfig
-  createDirectoryIfMissing True dir'
-  showConfig config
-  scotty (fromIntegral port') $ do
+  optsParser <- getOptionsParser
+  options@Options {..} <- execParser optsParser
+  let config = Config storageDir
+  createDirectoryIfMissing True storageDir
+  logOptions options
+  scotty (fromIntegral port) $ do
     get "/" homeView
     get "/blobs" (showHashes config)
     get "/blob/:hash" $ captureParam "hash" >>= getBlob config
     get "/content-types" (showContentTypes config)
     addroute HEAD "/blob/:hash" $ captureParam "hash" >>= headBlob config
     post "/blobs" (handleUpload config)
+
+logOptions :: Options -> IO ()
+logOptions Options{..} = do
+  writeLog LevelInfo $ ("Running on port " :: Text) <> show port
+  writeLog LevelInfo $ ("Using directory " :: Text) <> T.pack storageDir <> " for blob storage."
 
 template :: Text -> H.Html -> H.Html
 template title' body' = H.docTypeHtml $ do
