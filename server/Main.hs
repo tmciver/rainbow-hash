@@ -7,7 +7,6 @@ module Main where
 
 import Protolude hiding (get, put, catch)
 
-import Control.Monad.Catch (catch)
 import Control.Monad.Logger (LogLevel(LevelInfo))
 import Data.Set.Ordered (OSet)
 import qualified Data.Text as T
