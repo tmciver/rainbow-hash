@@ -12,7 +12,7 @@ module RainbowHash.Server.App
 
 import Protolude hiding (readFile)
 
-import Data.Aeson (ToJSON(..), FromJSON(..), Value(String), withText, withObject, (.:), (.=), object)
+import Data.Aeson (ToJSON(..), FromJSON(..), Value(String), withText, withObject, (.:), (.=), (.:?), (.!=), object)
 import Control.Monad (fail)
 import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
@@ -52,17 +52,19 @@ instance FromJSON MediaType where
 newtype Metadata = Metadata { getRHMetadata :: RH.Metadata }
 
 instance ToJSON Metadata where
-  toJSON (Metadata (RH.Metadata mt fileNames uploadedAt)) = object
+  toJSON (Metadata (RH.Metadata mt fileNames uploadedAt isCompressed)) = object
     [ "media_type" .= MediaType mt
     , "file_names" .= fileNames
     , "uploaded_at" .= uploadedAt
+    , "is_compressed" .= isCompressed
     ]
 
 instance FromJSON Metadata where
   parseJSON = withObject "Metadata" $ \o -> do
     Metadata <$> (RH.Metadata <$> (getRHMediaType <$> (o .: "media_type"))
                               <*> o .: "file_names"
-                              <*> o .: "uploaded_at")
+                              <*> o .: "uploaded_at"
+                              <*> o .:? "is_compressed" .!= False)
 
 fileIdToFilePath
   :: FileId       -- ^The ID of a file.
@@ -132,7 +134,7 @@ instance FileGet App where
       Just filter' -> OSet.filter (mkFilter filter') allFileMetadata
 
       where mkFilter :: Filter -> FileMetadataOnly -> Bool
-            mkFilter (FilterByContentType desiredMediaType) (FileMetadataOnly _ (RH.Metadata (RH.MediaType mediaType' _) _ _)) =
+            mkFilter (FilterByContentType desiredMediaType) (FileMetadataOnly _ (RH.Metadata (RH.MediaType mediaType' _) _ _ _)) =
               desiredMediaType `T.isInfixOf` mediaType'
 
   contentTypes = do

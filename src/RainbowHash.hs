@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module RainbowHash
   ( putFile
@@ -29,8 +30,10 @@ module RainbowHash
 
 import Protolude hiding (readFile)
 
+import qualified Codec.Compression.GZip as GZ
 import Data.Set.Ordered (OSet)
-import qualified Data.ByteString as B
+import qualified Data.Set as Set
+import qualified Data.ByteString.Lazy as LBS
 import System.FilePath (takeFileName)
 import qualified Crypto.Hash as C
 import Control.Monad.Logger (MonadLogger(..), logInfoN)
@@ -64,6 +67,7 @@ data Metadata = Metadata
   { mediaType :: MediaType
   , fileNames :: NESet FileName
   , uploadedAt :: UTCTime
+  , isCompressed :: Bool
   } deriving (Eq, Ord, Show, Generic)
 
 data File = File
@@ -148,13 +152,41 @@ putFile v fileName = do
       mediaType' <- getMediaType v >>= logMediaType
       time <- getCurrentTime
       let fileNames' = NES.singleton fileName
-          metadata = Metadata mediaType' fileNames' time
+          (bs', isCompressed) = if shouldCompress mediaType'
+            then let compressed = LBS.toStrict . GZ.compress . LBS.fromStrict $ bs
+                 in (compressed, True)
+            else (bs, False)
+          metadata = Metadata mediaType' fileNames' time isCompressed
 
-      putFileInternal fileId' metadata bs
+      putFileInternal fileId' metadata bs'
 
       logInfoN "Put file complete."
 
   pure fileId'
+
+shouldCompress
+  :: MediaType
+  -> Bool
+shouldCompress MediaType {..} =
+  let blacklist :: Set MediaTypeName
+      blacklist = Set.fromList [ "image/png"
+                               , "image/apng"
+                               , "image/jpeg"
+                               , "video/jpeg"
+                               , "application/epub+zip"
+                               , "application/gzip"
+                               , "application/x-bzip"
+                               , "application/x-bzip2"
+                               , "application/gzip"
+                               , "application/x-gzip"
+                               , "application/zip"
+                               , "application/x-zip"
+                               , "application/x-7z-compressed"
+                               , "audio/mpeg"
+                               , "video/mp4"
+                               , "video/mpeg"
+                               ]
+  in Set.notMember mediaTypeName blacklist
 
 -- Put the file at the given path in the store. The file's name will be stored
 -- as metadata. If you'd like to use a different file name for the metadata (if,
@@ -176,5 +208,5 @@ putFileFromFilePath fp = do
   putFile fp fileName
 
 -- | Return the 'Hash' of the given 'ByteString'.
-calcHash :: B.ByteString -> Hash
+calcHash :: ByteString -> Hash
 calcHash bs = show (C.hash bs :: C.SHA256)

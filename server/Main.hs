@@ -106,9 +106,10 @@ getBlob config hash' = do
   maybeFile <- liftIO $ runAppIO (RH.getFile fileId') config
   case maybeFile of
     Nothing -> notFound'
-    Just (File _ (Metadata mediaType _ _) bs) -> do
+    Just (File _ (Metadata mediaType _ _ isCompressed) bs) -> do
       let strictData = LB.fromStrict bs
       setHeader "Content-Type" (TL.fromStrict . mediaTypeToText $ mediaType)
+      when isCompressed (setHeader "Content-Encoding" "gzip")
       raw strictData
     where notFound' :: ActionM ()
           notFound' = status status404

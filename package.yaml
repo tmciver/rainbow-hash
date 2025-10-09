@@ -43,6 +43,7 @@ library:
   - text
   - time
   - transformers
+  - zlib
 
 executables:
   rh-server:
