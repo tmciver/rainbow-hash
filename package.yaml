@@ -35,6 +35,7 @@ library:
   - exceptions
   - filepath
   - hashing
+  - iso8601-time
   - monad-logger
   - mtl
   - nonempty-containers

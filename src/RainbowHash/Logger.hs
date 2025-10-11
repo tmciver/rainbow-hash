@@ -8,8 +8,8 @@ import Protolude
 import Control.Monad.Logger (LogLevel(..))
 import qualified Data.Text as T
 import Data.Time (UTCTime)
-import Data.Time.Format.ISO8601 (iso8601Show)
 import Data.Time.Clock (getCurrentTime)
+import Data.Time.ISO8601 (formatISO8601Millis)
 import System.Environment (lookupEnv)
 
 getLogLevelConfig :: IO LogLevel
@@ -34,4 +34,4 @@ writeLog level msg = do
     time <- getCurrentTime
     putStrLn $ showTime time <> " " <> showLogLevel level <> ": " <> msg
   where showTime :: UTCTime -> Text
-        showTime = T.pack . iso8601Show
+        showTime = T.pack . formatISO8601Millis
