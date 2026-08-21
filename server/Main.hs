@@ -22,6 +22,7 @@ import qualified Data.Text.Encoding as T
 import Network.HTTP.Types.Status (status201)
 import Options.Applicative (execParser)
 import System.Directory (createDirectoryIfMissing)
+import System.IO (hSetBuffering, BufferMode(LineBuffering))
 import Network.HTTP.Types.Method (StdMethod(HEAD))
 
 import qualified RainbowHash as RH
@@ -33,6 +34,7 @@ import RainbowHash.Server.Options (getOptionsParser, Options(..))
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
   optsParser <- getOptionsParser
   options@Options {..} <- execParser optsParser
   let config = Config storageDir
